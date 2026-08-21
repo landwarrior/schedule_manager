@@ -28,6 +28,41 @@ python app.py
 - ブラウザで http://127.0.0.1:5000 を開きます。
 - 初回起動時に `schedule.db`（SQLite）が自動作成されます。
 
+## データベースの切り替え
+
+アプリが参照する DB は、プロジェクト直下の `schedule.db` です（`db.py` の `DB_PATH`）。  
+別データを確認したいときは、アプリを止めたうえでファイルをリネームして切り替えます。  
+以下は PowerShell 向けの手順です。Windows Terminal でコマンドプロンプトを使っている場合は、タブの `∨` から PowerShell を起動してください。
+
+```powershell
+# PowerShell で実行すること（コマンドプロンプトでは Rename-Item は使えません）
+
+# 1. アプリを停止する（Ctrl+C）
+
+# 2. いま使っている DB を退避
+Rename-Item schedule.db schedule_work.db
+
+# 3. 確認したい DB を schedule.db にする
+Rename-Item schedule_check.db schedule.db
+
+# 4. アプリを再起動
+python app.py
+```
+
+元に戻すときは、同様にリネームし直します。
+
+```powershell
+# PowerShell で実行すること
+
+# アプリ停止後
+Rename-Item schedule.db schedule_check.db
+Rename-Item schedule_work.db schedule.db
+python app.py
+```
+
+- `schedule.db` が無い状態で起動すると、空の DB が新規作成されます。
+- パス自体を変えたい場合は `db.py` の `DB_PATH` を編集してください。
+
 ## 画面
 
 | 画面 | 内容 |
