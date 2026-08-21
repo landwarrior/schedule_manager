@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}スケジュール — スケジュール管理{% endblock %}
+{% block content %}
+<section class="toolbar">
+  <form class="inline-form" method="get" action="{{ url_for('schedule') }}">
+    <div class="range-control">
+      <span class="range-label">表示期間</span>
+      <div class="range-fields">
+        <input type="text" name="from" value="{{ display_from }}" data-datepicker="month" placeholder="YYYY-MM" required aria-label="表示開始月">
+        <span class="range-sep">〜</span>
+        <input type="text" name="to" value="{{ display_to }}" data-datepicker="month" placeholder="YYYY-MM" required aria-label="表示終了月">
+      </div>
+    </div>
+    <button type="submit">表示</button>
+  </form>
+  <p class="muted">
+    メンバー人数: {{ member_count }}人 ／ キャパ = 営業日 × 人数 ／
+    安全率: {{ '%.0f'|format(safety_rate) }}%
+    （割当がキャパ×安全率を超えると黄、キャパ到達で赤）
+  </p>
+</section>
+
+<div class="table-scroll">
+  <table class="schedule-table">
+    <thead>
+      <tr>
+        <th class="sticky-col col-project">プロジェクト</th>
+        <th class="sticky-col col-phase">工程</th>
+        <th class="sticky-col col-meta1">総工数</th>
+        <th class="sticky-col col-meta2">割当済</th>
+        <th class="sticky-col col-meta3">差分</th>
+        {% for ym in months %}
+          <th colspan="3" class="month-head">{{ ym.replace('-', '/') }}</th>
+        {% endfor %}
+      </tr>
+      <tr>
+        <th class="sticky-col"></th>
+        <th class="sticky-col"></th>
+        <th class="sticky-col"></th>
+        <th class="sticky-col"></th>
+        <th class="sticky-col"></th>
+        {% for ym in months %}
+          {% for d in [1, 2, 3] %}
+            <th class="decade-head">{{ decade_labels[d] }}</th>
+          {% endfor %}
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% if not projects %}
+        <tr>
+          <td colspan="{{ 5 + months|length * 3 }}" class="empty">
+            プロジェクトがありません。<a href="{{ url_for('projects_new') }}">作成する</a>
+          </td>
+        </tr>
+      {% endif %}
+
+      {% for project in projects %}
+        {% set ns = namespace(shown_name=false) %}
+        {% for phase in project.phases if phase.key != 'release' %}
+          <tr>
+            {% if not ns.shown_name %}
+              <th class="sticky-col col-project" rowspan="{{ project.phases|length + 1 }}">
+                <a href="{{ url_for('projects_edit', project_id=project.id) }}">{{ project.name }}</a>
+              </th>
+              {% set ns.shown_name = true %}
+            {% endif %}
+            <td class="sticky-col col-phase">{{ phase.label }}</td>
+            <td class="sticky-col col-meta1 num" data-phase-total="{{ project.id }}-{{ phase.key }}">{{ '%.1f'|format(phase.total) }}</td>
+            <td class="sticky-col col-meta2 num" data-phase-allocated="{{ project.id }}-{{ phase.key }}">{{ '%.1f'|format(phase.allocated) }}</td>
+            <td class="sticky-col col-meta3 num {% if phase.diff != 0 %}warn{% endif %}" data-phase-diff="{{ project.id }}-{{ phase.key }}">{{ '%.1f'|format(phase.diff) }}</td>
+            {% for cell in phase.cells %}
+              <td class="effort-cell {% if cell.effort %}has-effort{% endif %}">
+                <input
+                  class="effort-input"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value="{{ '%.1f'|format(cell.effort) if cell.effort else '' }}"
+                  data-project-id="{{ project.id }}"
+                  data-phase="{{ phase.key }}"
+                  data-ym="{{ cell.ym }}"
+                  data-decade="{{ cell.decade }}"
+                >
+              </td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+        <tr class="test-t-row">
+          {% if not ns.shown_name %}
+            <th class="sticky-col col-project" rowspan="{{ project.phases|length + 1 }}">
+              <a href="{{ url_for('projects_edit', project_id=project.id) }}">{{ project.name }}</a>
+            </th>
+            {% set ns.shown_name = true %}
+          {% endif %}
+          <td class="sticky-col col-phase">試験T</td>
+          <td class="sticky-col col-meta1" colspan="3">期間のみ</td>
+          {% for cell in project.test_t_cells %}
+            <td class="test-t-cell {% if cell.active %}active{% endif %}">
+              {% if cell.active %}●{% endif %}
+            </td>
+          {% endfor %}
+        </tr>
+        {% for phase in project.phases if phase.key == 'release' %}
+          <tr>
+            <td class="sticky-col col-phase">{{ phase.label }}</td>
+            <td class="sticky-col col-meta1 num" data-phase-total="{{ project.id }}-{{ phase.key }}">{{ '%.1f'|format(phase.total) }}</td>
+            <td class="sticky-col col-meta2 num" data-phase-allocated="{{ project.id }}-{{ phase.key }}">{{ '%.1f'|format(phase.allocated) }}</td>
+            <td class="sticky-col col-meta3 num {% if phase.diff != 0 %}warn{% endif %}" data-phase-diff="{{ project.id }}-{{ phase.key }}">{{ '%.1f'|format(phase.diff) }}</td>
+            {% for cell in phase.cells %}
+              <td class="effort-cell {% if cell.effort %}has-effort{% endif %}">
+                <input
+                  class="effort-input"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value="{{ '%.1f'|format(cell.effort) if cell.effort else '' }}"
+                  data-project-id="{{ project.id }}"
+                  data-phase="{{ phase.key }}"
+                  data-ym="{{ cell.ym }}"
+                  data-decade="{{ cell.decade }}"
+                >
+              </td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <th class="sticky-col" colspan="2">営業日</th>
+        <td class="sticky-col" colspan="3"></td>
+        {% for item in summary %}
+          <td class="num" data-biz="{{ item.ym }}-{{ item.decade }}">{{ item.business_days }}</td>
+        {% endfor %}
+      </tr>
+      <tr>
+        <th class="sticky-col" colspan="2">キャパ（人日）</th>
+        <td class="sticky-col" colspan="3"></td>
+        {% for item in summary %}
+          <td class="num" data-cap="{{ item.ym }}-{{ item.decade }}">{{ '%.1f'|format(item.capacity) }}</td>
+        {% endfor %}
+      </tr>
+      <tr>
+        <th class="sticky-col" colspan="2">割当合計（人日）</th>
+        <td class="sticky-col" colspan="3"></td>
+        {% for item in summary %}
+          <td class="num {% if item.status == 'over' %}cap-over{% elif item.status == 'warn' %}cap-warn{% endif %}" data-sum="{{ item.ym }}-{{ item.decade }}">{{ '%.1f'|format(item.allocated) }}</td>
+        {% endfor %}
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='schedule.js') }}"></script>
+{% endblock %}

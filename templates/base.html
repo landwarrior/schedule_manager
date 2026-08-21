@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="{{ ui_theme }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}スケジュール管理{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand"><a href="{{ url_for('schedule') }}">スケジュール管理</a></div>
+    <nav>
+      <a href="{{ url_for('schedule') }}">スケジュール</a>
+      <a href="{{ url_for('projects_list') }}">プロジェクト</a>
+      <a href="{{ url_for('holidays') }}">祝日</a>
+      <a href="{{ url_for('settings_page') }}">設定</a>
+      <form class="theme-switcher" method="post" action="{{ url_for('settings_theme') }}">
+        <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+        <label>
+          テーマ
+          <select name="theme" onchange="this.form.submit()" aria-label="カラーテーマ">
+            {% for key in theme_choices %}
+              <option value="{{ key }}" {% if ui_theme == key %}selected{% endif %}>{{ theme_labels[key] }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </form>
+    </nav>
+  </header>
+
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flash-list">
+          {% for category, message in messages %}
+            <li class="flash flash-{{ category }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block scripts %}{% endblock %}
+  <script src="{{ url_for('static', filename='datepicker.js') }}"></script>
+</body>
+</html>

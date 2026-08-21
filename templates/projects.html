@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}プロジェクト — スケジュール管理{% endblock %}
+{% block content %}
+<section class="toolbar">
+  <h1>プロジェクト</h1>
+  <a class="button" href="{{ url_for('projects_new') }}">新規作成</a>
+</section>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      {% for key, label in phases %}
+        <th>{{ label }}（総/割当）</th>
+      {% endfor %}
+      <th>試験T</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% if not projects %}
+      <tr><td colspan="{{ 3 + phases|length }}" class="empty">プロジェクトがありません</td></tr>
+    {% endif %}
+    {% for project in projects %}
+      <tr>
+        <td><a href="{{ url_for('projects_edit', project_id=project.id) }}">{{ project.name }}</a></td>
+        {% for key, label in phases %}
+          {% set alloc = allocated.get((project.id, key), 0.0) %}
+          <td class="num">{{ '%.1f'|format(project.totals[key]) }} / {{ '%.1f'|format(alloc) }}</td>
+        {% endfor %}
+        <td>
+          {% if project.test_t.start_ym and project.test_t.end_ym %}
+            {{ project.test_t.start_ym.replace('-', '/') }} {{ decade_labels[project.test_t.start_decade] }}
+            〜
+            {{ project.test_t.end_ym.replace('-', '/') }} {{ decade_labels[project.test_t.end_decade] }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td class="actions">
+          <form method="post" action="{{ url_for('projects_delete', project_id=project.id) }}" onsubmit="return confirm('削除しますか？');">
+            <button type="submit" class="danger">削除</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

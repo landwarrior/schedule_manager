@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}祝日 — スケジュール管理{% endblock %}
+{% block content %}
+<section class="toolbar">
+  <h1>祝日・休業日</h1>
+</section>
+
+<form method="post" class="inline-form">
+  <label>
+    日付
+    <input type="text" name="date" data-datepicker="date" placeholder="YYYY-MM-DD" required>
+  </label>
+  <label>
+    名称
+    <input type="text" name="name" placeholder="例: 元日">
+  </label>
+  <button type="submit">追加</button>
+</form>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>日付</th>
+      <th>名称</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% if not holidays %}
+      <tr><td colspan="3" class="empty">祝日は未登録です</td></tr>
+    {% endif %}
+    {% for holiday in holidays %}
+      <tr>
+        <td>{{ holiday.date }}</td>
+        <td>{{ holiday.name or '—' }}</td>
+        <td class="actions">
+          <form method="post" action="{{ url_for('holidays_delete', date_str=holiday.date) }}"
+                onsubmit="return confirm('削除しますか？');">
+            <button type="submit" class="danger">削除</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

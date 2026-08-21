@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == 'new' %}新規プロジェクト{% else %}プロジェクト編集{% endif %} — スケジュール管理{% endblock %}
+{% block content %}
+<section class="toolbar">
+  <h1>{% if mode == 'new' %}新規プロジェクト{% else %}プロジェクト編集{% endif %}</h1>
+</section>
+
+<form method="post" class="stack-form">
+  <label>
+    プロジェクト名
+    <input type="text" name="name" required value="{{ project.name if project else '' }}">
+  </label>
+
+  <fieldset>
+    <legend>総工数（人日・0.1刻み）</legend>
+    {% for key, label in phases %}
+      <label>
+        {{ label }}
+        <input type="number" name="total_{{ key }}" min="0" step="0.1"
+               value="{{ '%.1f'|format(project.totals[key]) if project else '0.0' }}">
+      </label>
+    {% endfor %}
+  </fieldset>
+
+  <fieldset>
+    <legend>試験T期間（工数なし）</legend>
+    <div class="period-row">
+      <label>
+        開始月
+        <input type="text" name="test_t_start_ym" data-datepicker="month" placeholder="YYYY-MM"
+               value="{{ project.test_t.start_ym if project and project.test_t.start_ym else '' }}">
+      </label>
+      <label>
+        開始旬
+        <select name="test_t_start_decade">
+          <option value="">—</option>
+          {% for d, label in decade_labels.items() %}
+            <option value="{{ d }}"
+              {% if project and project.test_t.start_decade == d %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <span>〜</span>
+      <label>
+        終了月
+        <input type="text" name="test_t_end_ym" data-datepicker="month" placeholder="YYYY-MM"
+               value="{{ project.test_t.end_ym if project and project.test_t.end_ym else '' }}">
+      </label>
+      <label>
+        終了旬
+        <select name="test_t_end_decade">
+          <option value="">—</option>
+          {% for d, label in decade_labels.items() %}
+            <option value="{{ d }}"
+              {% if project and project.test_t.end_decade == d %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+  </fieldset>
+
+  <div class="form-actions">
+    <button type="submit">保存</button>
+    <a class="button secondary" href="{{ url_for('projects_list') }}">戻る</a>
+  </div>
+</form>
+{% endblock %}

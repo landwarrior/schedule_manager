@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}設定 — スケジュール管理{% endblock %}
+{% block content %}
+<section class="toolbar">
+  <h1>設定</h1>
+</section>
+
+<form method="post" class="stack-form">
+  <label>
+    メンバー人数
+    <input type="number" name="member_count" min="1" step="1" required
+           value="{{ settings.member_count }}">
+  </label>
+  <label>
+    安全率（%）
+    <input type="number" name="safety_rate" min="1" max="100" step="1" required
+           value="{{ '%.0f'|format(settings.safety_rate if settings.safety_rate is not none else 80) }}">
+    <span class="field-help">割当が「キャパ × 安全率」を超えると黄色、キャパに達すると赤色になります（既定 80%）</span>
+  </label>
+  <label>
+    デフォルト表示開始月
+    <input type="text" name="display_from" data-datepicker="month" placeholder="YYYY-MM" required
+           value="{{ settings.display_from }}">
+  </label>
+  <label>
+    デフォルト表示終了月
+    <input type="text" name="display_to" data-datepicker="month" placeholder="YYYY-MM" required
+           value="{{ settings.display_to }}">
+  </label>
+  <fieldset>
+    <legend>カラーテーマ</legend>
+    <div class="theme-options">
+      {% set current_theme = settings.theme if settings.theme else 'system' %}
+      {% for key in theme_choices %}
+        <label>
+          <input type="radio" name="theme" value="{{ key }}"
+                 {% if current_theme == key %}checked{% endif %} required>
+          {{ theme_labels[key] }}
+        </label>
+      {% endfor %}
+    </div>
+    <span class="field-help">ライト基準色 #e0e0e0 ／ ダーク基準色 #272727 ／ システムは OS の設定に追従</span>
+  </fieldset>
+  <div class="form-actions">
+    <button type="submit">保存</button>
+  </div>
+</form>
+{% endblock %}
