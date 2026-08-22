@@ -5,7 +5,7 @@
   <h1>{% if mode == 'new' %}新規プロジェクト{% else %}プロジェクト編集{% endif %}</h1>
 </section>
 
-<form method="post" class="stack-form" id="project-form">
+<form method="post" class="stack-form stack-form-wide" id="project-form">
   <label>
     プロジェクト名
     <input type="text" name="name" required value="{{ project.name if project else '' }}">
@@ -16,7 +16,7 @@
     <p class="field-help">
       工程名・背景色は<a href="{{ url_for('phases_page') }}">工程マスタ</a>、
       祝日・休業日は<a href="{{ url_for('holidays') }}">祝日・休業日マスタ</a>で管理します。
-      ここでは<strong>表示する工程</strong>、<strong>入力方式</strong>（工数入力／期間のみ）、表示順、総工数・期間を設定します。
+      ここでは<strong>表示する工程</strong>、<strong>入力方式</strong>（工数入力／期間のみ）、表示順、見積工数・期間を設定します。
     </p>
     <input type="hidden" name="phase_order" id="phase-order"
            value="{{ project.phases | map(attribute='phase_id') | join(',') }}">
@@ -24,13 +24,16 @@
       {% for phase in project.phases %}
         <div class="phase-config-item {% if not phase.enabled %}is-disabled{% endif %}" data-phase-id="{{ phase.phase_id }}">
           <div class="phase-config-head">
-            <label class="phase-enabled-label">
+            <strong class="phase-config-name">{{ phase.name }}</strong>
+            <label class="phase-visibility-toggle">
               <input type="checkbox" name="enabled_{{ phase.phase_id }}" value="1"
                      class="phase-enabled-toggle"
                      {% if phase.enabled %}checked{% endif %}>
-              <strong>{{ phase.name }}</strong>
+              <span class="phase-visibility-label">
+                <span class="when-on">スケジュールに表示</span>
+                <span class="when-off">スケジュールに非表示</span>
+              </span>
             </label>
-            <span class="field-help">{{ phase_color_labels[phase.color] }}</span>
             <span class="phase-order-actions">
               <button type="button" class="secondary phase-move-up" aria-label="上へ">↑</button>
               <button type="button" class="secondary phase-move-down" aria-label="下へ">↓</button>
@@ -53,20 +56,21 @@
             </div>
             <div class="phase-effort-fields" {% if phase.input_mode != 'effort' %}hidden{% endif %}>
               <label>
-                総工数（人日・0.1刻み）
+                見積工数（人日・0.1刻み）
                 <input type="number" name="total_{{ phase.phase_id }}" min="0" step="0.1"
                        value="{{ '%.1f'|format(phase.total_effort) if phase.total_effort is not none else '0.0' }}">
+                <span class="field-help">工程に見積もった工数。</span>
               </label>
             </div>
             <div class="phase-period-fields" {% if phase.input_mode != 'period' %}hidden{% endif %}>
               <div class="period-row">
-                <label>
-                  開始月
+                <label class="period-field">
+                  <span class="period-field-label">開始月</span>
                   <input type="text" name="period_{{ phase.phase_id }}_start_ym" data-datepicker="month" placeholder="YYYY-MM"
                          value="{{ phase.start_ym if phase.start_ym else '' }}">
                 </label>
-                <label>
-                  開始旬
+                <label class="period-field">
+                  <span class="period-field-label">開始旬</span>
                   <select name="period_{{ phase.phase_id }}_start_decade">
                     <option value="">—</option>
                     {% for d, label in decade_labels.items() %}
@@ -74,14 +78,17 @@
                     {% endfor %}
                   </select>
                 </label>
-                <span>〜</span>
-                <label>
-                  終了月
+                <div class="period-sep" aria-hidden="true">
+                  <span class="period-field-label period-sep-spacer">開始月</span>
+                  <span class="period-sep-mark">〜</span>
+                </div>
+                <label class="period-field">
+                  <span class="period-field-label">終了月</span>
                   <input type="text" name="period_{{ phase.phase_id }}_end_ym" data-datepicker="month" placeholder="YYYY-MM"
                          value="{{ phase.end_ym if phase.end_ym else '' }}">
                 </label>
-                <label>
-                  終了旬
+                <label class="period-field">
+                  <span class="period-field-label">終了旬</span>
                   <select name="period_{{ phase.phase_id }}_end_decade">
                     <option value="">—</option>
                     {% for d, label in decade_labels.items() %}

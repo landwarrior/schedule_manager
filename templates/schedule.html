@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 {% block title %}スケジュール — スケジュール管理{% endblock %}
+{% block body_class %}page-schedule{% endblock %}
 {% block content %}
 {% if contract_name %}
 <section class="contract-header">
   <h1>{{ contract_name }}</h1>
 </section>
 {% endif %}
-<section class="toolbar">
-  <form class="inline-form" method="get" action="{{ url_for('schedule') }}">
+<section class="toolbar schedule-toolbar">
+  <form class="inline-form schedule-range-form" method="get" action="{{ url_for('schedule') }}">
     <div class="range-control">
       <span class="range-label">表示期間</span>
       <div class="range-fields">
@@ -18,11 +19,15 @@
     </div>
     <button type="submit">表示</button>
   </form>
-  <p class="muted">
-    メンバー人数: {{ member_count }}人 ／ キャパ = 営業日 × 人数 ／
-    安全率: {{ '%.0f'|format(safety_rate) }}%
-    （割当がキャパ×安全率を超えると黄、キャパ到達で赤）
-  </p>
+  <div class="schedule-toolbar-notes muted">
+    <p>
+      メンバー人数: {{ member_count }}人 ／ キャパ = 営業日 × 人数 ／
+      安全率: {{ '%.0f'|format(safety_rate) }}%
+      （割当がキャパ×安全率を超えると黄、キャパ到達で赤）
+      ／ 差分 = 見積工数 − 割当済（プラスは割当不足、マイナスは見積が甘い）
+      ／ 工数セルは矢印キーで移動
+    </p>
+  </div>
 </section>
 
 <div class="table-scroll">
@@ -31,7 +36,7 @@
       <tr>
         <th class="sticky-col col-project">プロジェクト</th>
         <th class="sticky-col col-phase">工程</th>
-        <th class="sticky-col col-meta1">総工数</th>
+        <th class="sticky-col col-meta1">見積工数</th>
         <th class="sticky-col col-meta2">割当済</th>
         <th class="sticky-col col-meta3">差分</th>
         {% for ym in months %}
@@ -76,7 +81,7 @@
           {% if phase.input_mode == 'effort' %}
             <td class="sticky-col col-meta1 num" data-phase-total="{{ project.id }}-{{ phase.id }}">{{ '%.1f'|format(phase.total) }}</td>
             <td class="sticky-col col-meta2 num" data-phase-allocated="{{ project.id }}-{{ phase.id }}">{{ '%.1f'|format(phase.allocated) }}</td>
-            <td class="sticky-col col-meta3 num {% if phase.diff != 0 %}warn{% endif %}" data-phase-diff="{{ project.id }}-{{ phase.id }}">{{ '%.1f'|format(phase.diff) }}</td>
+            <td class="sticky-col col-meta3 num {% if phase.diff > 0 %}warn{% elif phase.diff < 0 %}diff-over{% endif %}" data-phase-diff="{{ project.id }}-{{ phase.id }}">{{ '%.1f'|format(phase.diff) }}</td>
             {% for cell in phase.cells %}
               <td class="phase-cell color-{{ phase.color }} {% if cell.active %}active{% endif %}">
                 <input

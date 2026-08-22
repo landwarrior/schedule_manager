@@ -6,7 +6,7 @@
   <title>{% block title %}スケジュール管理{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <header class="site-header">
     <div class="brand"><a href="{{ url_for('schedule') }}">スケジュール管理</a></div>
     <nav>

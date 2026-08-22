@@ -160,6 +160,21 @@ def reorder_phase_definitions(ordered_ids: list[int]) -> None:
         conn.commit()
 
 
+def reorder_projects(ordered_ids: list[int]) -> None:
+    if not ordered_ids:
+        raise ValueError("並び順が不正です")
+    with get_connection() as conn:
+        known = {row["id"] for row in conn.execute("SELECT id FROM projects").fetchall()}
+        if set(ordered_ids) != known:
+            raise ValueError("並び順が不正です")
+        for index, project_id in enumerate(ordered_ids):
+            conn.execute(
+                "UPDATE projects SET sort_order = ? WHERE id = ?",
+                (index, project_id),
+            )
+        conn.commit()
+
+
 def delete_phase_definition(phase_id: int) -> None:
     with get_connection() as conn:
         count = conn.execute("SELECT COUNT(*) AS c FROM phase_definitions").fetchone()["c"]

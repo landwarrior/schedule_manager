@@ -38,6 +38,7 @@ from models import (
     list_projects,
     phase_input_mode_label,
     reorder_phase_definitions,
+    reorder_projects,
     set_allocation,
     update_holiday,
     update_phase_definition,
@@ -338,8 +339,22 @@ def api_set_allocation():
     )
 
 
-@app.route("/projects")
+@app.route("/projects", methods=["GET", "POST"])
 def projects_list():
+    if request.method == "POST":
+        action = (request.form.get("action") or "").strip()
+        try:
+            if action == "reorder":
+                order_raw = (request.form.get("project_order") or "").strip()
+                ordered_ids = [int(part) for part in order_raw.split(",") if part.strip()]
+                reorder_projects(ordered_ids)
+                flash("表示順を保存しました", "ok")
+            else:
+                raise ValueError("操作が不正です")
+        except ValueError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("projects_list"))
+
     projects = list_projects()
     allocated = allocated_totals_by_project_phase()
     return render_template(

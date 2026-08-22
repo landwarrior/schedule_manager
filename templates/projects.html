@@ -3,12 +3,27 @@
 {% block content %}
 <section class="toolbar">
   <h1>プロジェクト</h1>
-  <a class="button" href="{{ url_for('projects_new') }}">新規作成</a>
 </section>
+
+<p class="field-help">
+  工数入力の工程は <strong>割当済 / 見積工数</strong>（人日・0.1 刻み）で表示します。
+  左がスケジュール上の割当合計、右が見積工数です。
+  期間のみの工程は期間、非表示の工程は「非表示」と表示します。
+</p>
+
+{% if projects %}
+<form method="post" id="project-order-form" class="phase-order-form">
+  <input type="hidden" name="action" value="reorder">
+  <input type="hidden" name="project_order" id="project-order"
+         value="{{ projects | map(attribute='id') | join(',') }}">
+  <button type="submit">並び順を保存</button>
+</form>
+{% endif %}
 
 <table class="data-table">
   <thead>
     <tr>
+      <th class="col-order">表示順</th>
       <th>名前</th>
       {% for phase in phase_definitions %}
         <th>{{ phase.name }}</th>
@@ -16,20 +31,29 @@
       <th></th>
     </tr>
   </thead>
-  <tbody>
+  <tbody id="project-list">
     {% if not projects %}
-      <tr><td colspan="{{ 2 + phase_definitions|length }}" class="empty">プロジェクトがありません</td></tr>
+      <tr><td colspan="{{ 3 + phase_definitions|length }}" class="empty">プロジェクトがありません</td></tr>
     {% endif %}
     {% for project in projects %}
-      <tr>
+      <tr data-project-id="{{ project.id }}">
+        <td class="col-order">
+          <span class="phase-order-actions">
+            <button type="button" class="secondary phase-move-up" aria-label="上へ">↑</button>
+            <button type="button" class="secondary phase-move-down" aria-label="下へ">↓</button>
+          </span>
+        </td>
         <td><a href="{{ url_for('projects_edit', project_id=project.id) }}">{{ project.name }}</a></td>
-        {% for phase in project.phases %}
+        {% for phase_def in phase_definitions %}
+          {% set phase = project.phases | selectattr('phase_id', 'equalto', phase_def.id) | first %}
           <td>
-            {% if not phase.enabled %}
+            {% if not phase %}
+              —
+            {% elif not phase.enabled %}
               <span class="field-help">非表示</span>
             {% elif phase.input_mode == 'effort' %}
               {% set alloc = allocated.get((project.id, phase.phase_id), 0.0) %}
-              <span class="num">{{ '%.1f'|format(phase.total_effort) }} / {{ '%.1f'|format(alloc) }}</span>
+              <span class="num">{{ '%.1f'|format(alloc) }} / {{ '%.1f'|format(phase.total_effort) }}</span>
             {% elif phase.start_ym and phase.end_ym %}
               {{ phase.start_ym.replace('-', '/') }} {{ decade_labels[phase.start_decade] }}
               〜
@@ -48,4 +72,42 @@
     {% endfor %}
   </tbody>
 </table>
+
+<div class="form-actions list-page-actions">
+  <a class="button" href="{{ url_for('projects_new') }}">新規作成</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  const list = document.getElementById("project-list");
+  const orderInput = document.getElementById("project-order");
+  if (!list || !orderInput) return;
+
+  function syncOrder() {
+    const ids = [...list.querySelectorAll("tr[data-project-id]")].map(
+      (row) => row.dataset.projectId
+    );
+    orderInput.value = ids.join(",");
+  }
+
+  list.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    const row = button.closest("tr[data-project-id]");
+    if (!row) return;
+    if (button.classList.contains("phase-move-up")) {
+      const prev = row.previousElementSibling;
+      if (prev?.dataset.projectId) list.insertBefore(row, prev);
+      syncOrder();
+    }
+    if (button.classList.contains("phase-move-down")) {
+      const next = row.nextElementSibling;
+      if (next?.dataset.projectId) list.insertBefore(next, row);
+      syncOrder();
+    }
+  });
+})();
+</script>
 {% endblock %}

@@ -6,11 +6,7 @@
   <h1>工程マスタ</h1>
 </section>
 
-<p class="field-help">
-  工程名と背景色を管理します。入力方式（期間のみ／工数入力）は
-  <a href="{{ url_for('projects_list') }}">プロジェクト設定</a>で工程ごとに指定します。
-  表示／非表示もプロジェクト設定で切り替えます。
-</p>
+<p class="field-help">工程名と背景色を管理します。入力方式（期間のみ／工数入力）は<a href="{{ url_for('projects_list') }}">プロジェクト設定</a>で工程ごとに指定します。表示／非表示もプロジェクト設定で切り替えます。</p>
 
 <form method="post" id="phase-order-form" class="phase-order-form">
   <input type="hidden" name="action" value="reorder">

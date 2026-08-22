@@ -2,6 +2,62 @@
   const inputs = document.querySelectorAll(".effort-input");
   let activeRow = null;
 
+  function effortGrid() {
+    return [...document.querySelectorAll(".schedule-table tbody tr")]
+      .filter((row) => row.querySelector(".effort-input"))
+      .map((row) => [...row.querySelectorAll(".effort-input")]);
+  }
+
+  function effortPosition(grid, input) {
+    for (let row = 0; row < grid.length; row += 1) {
+      const col = grid[row].indexOf(input);
+      if (col >= 0) {
+        return { row, col };
+      }
+    }
+    return null;
+  }
+
+  function focusEffortInput(input) {
+    input.focus();
+    input.select();
+    input.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+
+  function moveEffortInput(input, rowDelta, colDelta) {
+    const grid = effortGrid();
+    const pos = effortPosition(grid, input);
+    if (!pos) {
+      return;
+    }
+    const nextRow = pos.row + rowDelta;
+    const nextCol = pos.col + colDelta;
+    if (nextRow < 0 || nextRow >= grid.length) {
+      return;
+    }
+    if (nextCol < 0 || nextCol >= grid[nextRow].length) {
+      return;
+    }
+    focusEffortInput(grid[nextRow][nextCol]);
+  }
+
+  function handleEffortKeydown(event) {
+    const key = event.key;
+    if (key !== "ArrowLeft" && key !== "ArrowRight" && key !== "ArrowUp" && key !== "ArrowDown") {
+      return;
+    }
+    event.preventDefault();
+    if (key === "ArrowLeft") {
+      moveEffortInput(event.target, 0, -1);
+    } else if (key === "ArrowRight") {
+      moveEffortInput(event.target, 0, 1);
+    } else if (key === "ArrowUp") {
+      moveEffortInput(event.target, -1, 0);
+    } else if (key === "ArrowDown") {
+      moveEffortInput(event.target, 1, 0);
+    }
+  }
+
   function setActiveRow(input) {
     if (activeRow) {
       activeRow.classList.remove("row-editing");
@@ -78,7 +134,8 @@
       if (allocatedEl) allocatedEl.textContent = data.phase.allocated.toFixed(1);
       if (diffEl) {
         diffEl.textContent = data.phase.diff.toFixed(1);
-        diffEl.classList.toggle("warn", data.phase.diff !== 0);
+        diffEl.classList.toggle("warn", data.phase.diff > 0);
+        diffEl.classList.toggle("diff-over", data.phase.diff < 0);
       }
 
       const periodKey = `${data.period.year_month}-${data.period.decade}`;
@@ -105,6 +162,7 @@
     input.dataset.lastSaved = input.value.trim() === "" ? "" : input.value.trim();
     syncEffortStyle(input, input.value.trim() === "" ? 0 : Number(input.value));
     input.addEventListener("focus", () => setActiveRow(input));
+    input.addEventListener("keydown", handleEffortKeydown);
     input.addEventListener("blur", () => {
       window.setTimeout(() => {
         if (!document.activeElement?.classList.contains("effort-input")) {
