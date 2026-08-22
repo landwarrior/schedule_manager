@@ -14,6 +14,19 @@ from calendar_util import (
 from db import get_connection
 
 
+def _require_lastrowid(cur: sqlite3.Cursor) -> int:
+    lastrowid = cur.lastrowid
+    if lastrowid is None:
+        raise RuntimeError("INSERT did not return a row id")
+    return lastrowid
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    return int(value)
+
+
 def get_settings() -> sqlite3.Row:
     with get_connection() as conn:
         return conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
@@ -43,9 +56,7 @@ def update_theme(theme: str) -> None:
 
 def list_holidays() -> list[sqlite3.Row]:
     with get_connection() as conn:
-        return list(
-            conn.execute("SELECT date, name FROM holidays ORDER BY date").fetchall()
-        )
+        return list(conn.execute("SELECT date, name FROM holidays ORDER BY date").fetchall())
 
 
 def list_holiday_dates() -> list[str]:
@@ -82,8 +93,7 @@ def delete_holiday(date_str: str) -> None:
 def list_phase_definitions() -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT id, name, input_mode, color, sort_order, legacy_key "
-            "FROM phase_definitions ORDER BY sort_order, id"
+            "SELECT id, name, input_mode, color, sort_order, legacy_key FROM phase_definitions ORDER BY sort_order, id"
         ).fetchall()
         return [_phase_row(row) for row in rows]
 
@@ -91,8 +101,7 @@ def list_phase_definitions() -> list[dict[str, Any]]:
 def get_phase_definition(phase_id: int) -> dict[str, Any] | None:
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT id, name, input_mode, color, sort_order, legacy_key "
-            "FROM phase_definitions WHERE id = ?",
+            "SELECT id, name, input_mode, color, sort_order, legacy_key FROM phase_definitions WHERE id = ?",
             (phase_id,),
         ).fetchone()
         return _phase_row(row) if row else None
@@ -104,15 +113,12 @@ def create_phase_definition(name: str, color: str) -> int:
         raise ValueError("工程名は必須です")
     color = normalize_phase_color(color)
     with get_connection() as conn:
-        max_order = conn.execute(
-            "SELECT COALESCE(MAX(sort_order), 0) AS m FROM phase_definitions"
-        ).fetchone()["m"]
+        max_order = conn.execute("SELECT COALESCE(MAX(sort_order), 0) AS m FROM phase_definitions").fetchone()["m"]
         cur = conn.execute(
-            "INSERT INTO phase_definitions (name, input_mode, color, sort_order) "
-            "VALUES (?, 'effort', ?, ?)",
+            "INSERT INTO phase_definitions (name, input_mode, color, sort_order) VALUES (?, 'effort', ?, ?)",
             (name, color, max_order + 1),
         )
-        phase_id = int(cur.lastrowid)
+        phase_id = _require_lastrowid(cur)
         _attach_phase_to_all_projects(conn, phase_id, max_order + 1)
         conn.commit()
         return phase_id
@@ -128,9 +134,7 @@ def update_phase_definition(
         raise ValueError("工程名は必須です")
     color = normalize_phase_color(color)
     with get_connection() as conn:
-        row = conn.execute(
-            "SELECT id FROM phase_definitions WHERE id = ?", (phase_id,)
-        ).fetchone()
+        row = conn.execute("SELECT id FROM phase_definitions WHERE id = ?", (phase_id,)).fetchone()
         if row is None:
             raise ValueError("工程が見つかりません")
         conn.execute(
@@ -144,10 +148,7 @@ def reorder_phase_definitions(ordered_ids: list[int]) -> None:
     if not ordered_ids:
         raise ValueError("並び順が不正です")
     with get_connection() as conn:
-        known = {
-            row["id"]
-            for row in conn.execute("SELECT id FROM phase_definitions").fetchall()
-        }
+        known = {row["id"] for row in conn.execute("SELECT id FROM phase_definitions").fetchall()}
         if set(ordered_ids) != known:
             raise ValueError("並び順が不正です")
         for index, phase_id in enumerate(ordered_ids):
@@ -167,9 +168,7 @@ def delete_phase_definition(phase_id: int) -> None:
         conn.commit()
 
 
-def _attach_phase_to_all_projects(
-    conn: sqlite3.Connection, phase_id: int, sort_order: int
-) -> None:
+def _attach_phase_to_all_projects(conn: sqlite3.Connection, phase_id: int, sort_order: int) -> None:
     projects = conn.execute("SELECT id FROM projects").fetchall()
     for project in projects:
         conn.execute(
@@ -194,13 +193,11 @@ def _clear_project_phase_mode_data(
 ) -> None:
     if input_mode == "period":
         conn.execute(
-            "UPDATE project_phases SET total_effort = 0 "
-            "WHERE project_id = ? AND phase_id = ?",
+            "UPDATE project_phases SET total_effort = 0 WHERE project_id = ? AND phase_id = ?",
             (project_id, phase_id),
         )
         conn.execute(
-            "DELETE FROM allocations "
-            "WHERE project_id = ? AND phase_id = ?",
+            "DELETE FROM allocations WHERE project_id = ? AND phase_id = ?",
             (project_id, phase_id),
         )
     else:
@@ -267,9 +264,7 @@ def _load_project_phases(conn: sqlite3.Connection, project_id: int) -> list[dict
 
 def list_projects() -> list[dict[str, Any]]:
     with get_connection() as conn:
-        projects = conn.execute(
-            "SELECT id, name, sort_order FROM projects ORDER BY sort_order, id"
-        ).fetchall()
+        projects = conn.execute("SELECT id, name, sort_order FROM projects ORDER BY sort_order, id").fetchall()
         return [
             {
                 "id": project["id"],
@@ -313,23 +308,19 @@ def _init_project_phases(conn: sqlite3.Connection, project_id: int) -> None:
 
 def create_project(name: str, phase_configs: list[dict[str, Any]]) -> int:
     with get_connection() as conn:
-        max_order = conn.execute(
-            "SELECT COALESCE(MAX(sort_order), 0) AS m FROM projects"
-        ).fetchone()["m"]
+        max_order = conn.execute("SELECT COALESCE(MAX(sort_order), 0) AS m FROM projects").fetchone()["m"]
         cur = conn.execute(
             "INSERT INTO projects (name, sort_order) VALUES (?, ?)",
             (name.strip(), max_order + 1),
         )
-        project_id = int(cur.lastrowid)
+        project_id = _require_lastrowid(cur)
         _init_project_phases(conn, project_id)
         _save_project_phases(conn, project_id, phase_configs)
         conn.commit()
         return project_id
 
 
-def update_project(
-    project_id: int, name: str, phase_configs: list[dict[str, Any]]
-) -> None:
+def update_project(project_id: int, name: str, phase_configs: list[dict[str, Any]]) -> None:
     with get_connection() as conn:
         conn.execute(
             "UPDATE projects SET name = ? WHERE id = ?",
@@ -339,12 +330,8 @@ def update_project(
         conn.commit()
 
 
-def _save_project_phases(
-    conn: sqlite3.Connection, project_id: int, phase_configs: list[dict[str, Any]]
-) -> None:
-    known_ids = {
-        row["id"] for row in conn.execute("SELECT id FROM phase_definitions").fetchall()
-    }
+def _save_project_phases(conn: sqlite3.Connection, project_id: int, phase_configs: list[dict[str, Any]]) -> None:
+    known_ids = {row["id"] for row in conn.execute("SELECT id FROM phase_definitions").fetchall()}
     for index, config in enumerate(phase_configs):
         phase_id = int(config["phase_id"])
         if phase_id not in known_ids:
@@ -365,10 +352,8 @@ def _save_project_phases(
         else:
             start_ym = config.get("start_ym") or None
             end_ym = config.get("end_ym") or None
-            start_decade = config.get("start_decade")
-            end_decade = config.get("end_decade")
-            start_decade = int(start_decade) if start_decade else None
-            end_decade = int(end_decade) if end_decade else None
+            start_decade = _optional_int(config.get("start_decade"))
+            end_decade = _optional_int(config.get("end_decade"))
         conn.execute(
             "UPDATE project_phases SET sort_order = ?, enabled = ?, input_mode = ?, "
             "total_effort = ?, start_ym = ?, start_decade = ?, end_ym = ?, end_decade = ? "
@@ -394,9 +379,7 @@ def delete_project(project_id: int) -> None:
         conn.commit()
 
 
-def list_allocations(
-    from_ym: str, to_ym: str
-) -> dict[tuple[int, int, str, int], float]:
+def list_allocations(from_ym: str, to_ym: str) -> dict[tuple[int, int, str, int], float]:
     with get_connection() as conn:
         rows = conn.execute(
             """
@@ -411,17 +394,10 @@ def list_allocations(
             """,
             (from_ym, to_ym),
         ).fetchall()
-        return {
-            (row["project_id"], row["phase_id"], row["year_month"], row["decade"]): row[
-                "effort"
-            ]
-            for row in rows
-        }
+        return {(row["project_id"], row["phase_id"], row["year_month"], row["decade"]): row["effort"] for row in rows}
 
 
-def set_allocation(
-    project_id: int, phase_id: int, year_month: str, decade: int, effort: float
-) -> None:
+def set_allocation(project_id: int, phase_id: int, year_month: str, decade: int, effort: float) -> None:
     if decade not in (1, 2, 3):
         raise ValueError("invalid decade")
     effort = round_effort(effort)
@@ -429,8 +405,7 @@ def set_allocation(
         raise ValueError("effort must be in 0.1 increments")
     with get_connection() as conn:
         linked = conn.execute(
-            "SELECT enabled, input_mode FROM project_phases "
-            "WHERE project_id = ? AND phase_id = ?",
+            "SELECT enabled, input_mode FROM project_phases WHERE project_id = ? AND phase_id = ?",
             (project_id, phase_id),
         ).fetchone()
         if linked is None or not linked["enabled"]:
@@ -439,8 +414,7 @@ def set_allocation(
             raise ValueError("invalid phase")
         if effort == 0:
             conn.execute(
-                "DELETE FROM allocations "
-                "WHERE project_id = ? AND phase_id = ? AND year_month = ? AND decade = ?",
+                "DELETE FROM allocations WHERE project_id = ? AND phase_id = ? AND year_month = ? AND decade = ?",
                 (project_id, phase_id, year_month, decade),
             )
         else:

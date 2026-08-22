@@ -22,6 +22,7 @@ from calendar_util import (
 from db import init_db
 from models import (
     add_holiday,
+    allocated_totals_by_project_phase,
     create_phase_definition,
     create_project,
     delete_holiday,
@@ -35,13 +36,12 @@ from models import (
     list_holidays,
     list_phase_definitions,
     list_projects,
-    allocated_totals_by_project_phase,
     phase_input_mode_label,
+    reorder_phase_definitions,
     set_allocation,
+    update_holiday,
     update_phase_definition,
     update_project,
-    reorder_phase_definitions,
-    update_holiday,
     update_settings,
     update_theme,
 )
@@ -80,21 +80,39 @@ def inject_theme():
 
 
 def _parse_effort(raw: str | None) -> float:
-    if raw is None or str(raw).strip() == "":
+    if raw is None:
         return 0.0
-    value = round_effort(float(raw))
+    text = raw.strip()
+    if not text:
+        return 0.0
+    value = round_effort(float(text))
     if not is_valid_effort(value):
         raise ValueError("工数は 0.1 刻みで入力してください")
     return value
 
 
 def _parse_decade(raw: str | None) -> int | None:
-    if raw is None or str(raw).strip() == "":
+    if raw is None:
         return None
-    value = int(raw)
+    text = raw.strip()
+    if not text:
+        return None
+    value = int(text)
     if value not in (1, 2, 3):
         raise ValueError("旬が不正です")
     return value
+
+
+def _require_form_int(raw: str | None, message: str) -> int:
+    if raw is None:
+        raise ValueError(message)
+    text = raw.strip()
+    if not text:
+        raise ValueError(message)
+    try:
+        return int(text)
+    except ValueError as exc:
+        raise ValueError(message) from exc
 
 
 def _parse_project_phases(form) -> list[dict]:
@@ -218,9 +236,7 @@ def schedule():
     period_totals: dict[tuple[str, int], float] = {(ym, d): 0.0 for ym, d in columns}
     for (_project_id, _phase_id, ym, decade), effort in allocations.items():
         if (ym, decade) in period_totals:
-            period_totals[(ym, decade)] = round_effort(
-                period_totals[(ym, decade)] + effort
-            )
+            period_totals[(ym, decade)] = round_effort(period_totals[(ym, decade)] + effort)
 
     project_rows = []
     for project in projects:
@@ -282,17 +298,11 @@ def api_set_allocation():
     holidays = list_holiday_dates()
     with_period = list_allocations(year_month, year_month)
     period_total = round_effort(
-        sum(
-            e
-            for (_pid, _phase, ym, d), e in with_period.items()
-            if ym == year_month and d == decade
-        )
+        sum(e for (_pid, _phase, ym, d), e in with_period.items() if ym == year_month and d == decade)
     )
     cap = capacity(year_month, decade, holidays, settings["member_count"])
     biz = business_days(year_month, decade, holidays)
-    safety_rate = float(
-        settings["safety_rate"] if settings["safety_rate"] is not None else 80
-    )
+    safety_rate = float(settings["safety_rate"] if settings["safety_rate"] is not None else 80)
     status = allocation_status(period_total, cap, safety_rate)
     allocated_sums = allocated_totals_by_project_phase()
     project = get_project(project_id)
@@ -427,8 +437,9 @@ def phases_page():
                 )
                 flash("工程を追加しました", "ok")
             elif action == "update":
+                phase_id = _require_form_int(request.form.get("phase_id"), "工程が不正です")
                 update_phase_definition(
-                    int(request.form.get("phase_id")),
+                    phase_id,
                     request.form.get("name") or "",
                     request.form.get("color") or "cyan",
                 )

@@ -1,0 +1,41 @@
+[project]
+name = "schedule-manager"
+version = "0.1.0"
+description = "複数プロジェクトの工数・期間を旬単位で管理する Web アプリ"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "Flask>=3.0,<4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.16.4",
+]
+
+[tool.ruff]
+# Zed ビルトイン Ruff（0.16.4）と CLI の設定ずれを防ぐ
+required-version = ">=0.16.4"
+target-version = "py314"
+line-length = 120
+src = ["."]
+exclude = [
+    ".venv",
+    "**/__pycache__",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle
+    "F",      # Pyflakes
+    "I",      # isort
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "SIM",    # flake8-simplify
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "calendar_util", "db", "models"]
+
+[tool.ruff.format]
+quote-style = "double"

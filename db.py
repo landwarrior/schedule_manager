@@ -84,30 +84,18 @@ def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
 
 
 def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
-    return column in {
-        row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
-    }
+    return column in {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
 
 
 def _ensure_project_phases_columns(conn: sqlite3.Connection) -> None:
     if not _table_exists(conn, "project_phases"):
         return
-    columns = {
-        row["name"]
-        for row in conn.execute("PRAGMA table_info(project_phases)").fetchall()
-    }
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(project_phases)").fetchall()}
     if "enabled" not in columns:
-        conn.execute(
-            "ALTER TABLE project_phases ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1"
-        )
-    columns = {
-        row["name"]
-        for row in conn.execute("PRAGMA table_info(project_phases)").fetchall()
-    }
+        conn.execute("ALTER TABLE project_phases ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(project_phases)").fetchall()}
     if "input_mode" not in columns:
-        conn.execute(
-            "ALTER TABLE project_phases ADD COLUMN input_mode TEXT NOT NULL DEFAULT 'effort'"
-        )
+        conn.execute("ALTER TABLE project_phases ADD COLUMN input_mode TEXT NOT NULL DEFAULT 'effort'")
         conn.execute(
             """
             UPDATE project_phases
@@ -145,17 +133,11 @@ def _ensure_project_phases_columns(conn: sqlite3.Connection) -> None:
 
 
 def _ensure_settings_columns(conn: sqlite3.Connection) -> None:
-    columns = {
-        row["name"] for row in conn.execute("PRAGMA table_info(settings)").fetchall()
-    }
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(settings)").fetchall()}
     if "safety_rate" not in columns:
-        conn.execute(
-            "ALTER TABLE settings ADD COLUMN safety_rate REAL NOT NULL DEFAULT 80"
-        )
+        conn.execute("ALTER TABLE settings ADD COLUMN safety_rate REAL NOT NULL DEFAULT 80")
     if "theme" not in columns:
-        conn.execute(
-            "ALTER TABLE settings ADD COLUMN theme TEXT NOT NULL DEFAULT 'system'"
-        )
+        conn.execute("ALTER TABLE settings ADD COLUMN theme TEXT NOT NULL DEFAULT 'system'")
 
 
 def _seed_phase_definitions(conn: sqlite3.Connection) -> None:
@@ -164,16 +146,13 @@ def _seed_phase_definitions(conn: sqlite3.Connection) -> None:
         return
     for legacy_key, name, input_mode, color, sort_order in DEFAULT_PHASES:
         conn.execute(
-            "INSERT INTO phase_definitions "
-            "(name, input_mode, color, sort_order, legacy_key) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO phase_definitions (name, input_mode, color, sort_order, legacy_key) VALUES (?, ?, ?, ?, ?)",
             (name, input_mode, color, sort_order, legacy_key),
         )
 
 
 def _legacy_phase_map(conn: sqlite3.Connection) -> dict[str, int]:
-    rows = conn.execute(
-        "SELECT id, legacy_key FROM phase_definitions WHERE legacy_key IS NOT NULL"
-    ).fetchall()
+    rows = conn.execute("SELECT id, legacy_key FROM phase_definitions WHERE legacy_key IS NOT NULL").fetchall()
     return {row["legacy_key"]: row["id"] for row in rows}
 
 
@@ -200,16 +179,13 @@ def _migrate_project_data(conn: sqlite3.Connection, legacy_map: dict[str, int]) 
         test_t = None
         if _table_exists(conn, "test_t_period"):
             test_t = conn.execute(
-                "SELECT start_ym, start_decade, end_ym, end_decade "
-                "FROM test_t_period WHERE project_id = ?",
+                "SELECT start_ym, start_decade, end_ym, end_decade FROM test_t_period WHERE project_id = ?",
                 (project_id,),
             ).fetchone()
 
         test_t_mode = "period"
         if _column_exists(conn, "projects", "test_t_mode"):
-            row = conn.execute(
-                "SELECT test_t_mode FROM projects WHERE id = ?", (project_id,)
-            ).fetchone()
+            row = conn.execute("SELECT test_t_mode FROM projects WHERE id = ?", (project_id,)).fetchone()
             if row and row["test_t_mode"] in ("period", "effort"):
                 test_t_mode = row["test_t_mode"]
 
@@ -231,7 +207,7 @@ def _migrate_project_data(conn: sqlite3.Connection, legacy_map: dict[str, int]) 
                 phase_input_mode = "effort"
             conn.execute(
                 "INSERT INTO project_phases "
-                "(project_id, phase_id, sort_order, enabled, input_mode, total_effort, start_ym, start_decade, end_ym, end_decade) "
+                "(project_id, phase_id, sort_order, enabled, input_mode, total_effort, start_ym, start_decade, end_ym, end_decade) "  # noqa: E501
                 "VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)",
                 (
                     project_id,
@@ -258,9 +234,7 @@ def _migrate_legacy_schema(conn: sqlite3.Connection) -> None:
     if _table_exists(conn, "phase_totals") or _table_exists(conn, "test_t_period"):
         _migrate_project_data(conn, legacy_map)
 
-    if _column_exists(conn, "allocations", "phase") and not _column_exists(
-        conn, "allocations", "phase_id"
-    ):
+    if _column_exists(conn, "allocations", "phase") and not _column_exists(conn, "allocations", "phase_id"):
         conn.executescript(
             """
             CREATE TABLE allocations_new (
@@ -275,9 +249,7 @@ def _migrate_legacy_schema(conn: sqlite3.Connection) -> None:
             );
             """
         )
-        rows = conn.execute(
-            "SELECT project_id, phase, year_month, decade, effort FROM allocations"
-        ).fetchall()
+        rows = conn.execute("SELECT project_id, phase, year_month, decade, effort FROM allocations").fetchall()
         for row in rows:
             phase_id = legacy_map.get(row["phase"])
             if phase_id is None:

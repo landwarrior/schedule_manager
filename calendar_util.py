@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import calendar
+from collections.abc import Iterable
 from datetime import date
-from typing import Iterable
 
 DECADE_LABELS = {1: "上旬", 2: "中旬", 3: "下旬"}
 PHASE_INPUT_MODES = ("period", "effort")
@@ -107,7 +107,7 @@ def is_period_in_range(
         return False
     if compare_periods(ym, decade, start_ym, start_decade) < 0:
         return False
-    if compare_periods(ym, decade, end_ym, end_decade) > 0:
+    if compare_periods(ym, decade, end_ym, end_decade) > 0:  # noqa: SIM103
         return False
     return True
 
