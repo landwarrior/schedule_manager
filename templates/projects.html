@@ -29,10 +29,15 @@
           <td class="num">{{ '%.1f'|format(project.totals[key]) }} / {{ '%.1f'|format(alloc) }}</td>
         {% endfor %}
         <td>
-          {% if project.test_t.start_ym and project.test_t.end_ym %}
+          {% if project.test_t_mode == 'effort' %}
+            {% set alloc = allocated.get((project.id, 'integration'), 0.0) %}
+            <span class="num">{{ '%.1f'|format(project.totals.integration) }} / {{ '%.1f'|format(alloc) }}</span>
+            <span class="field-help">（工数入力）</span>
+          {% elif project.test_t.start_ym and project.test_t.end_ym %}
             {{ project.test_t.start_ym.replace('-', '/') }} {{ decade_labels[project.test_t.start_decade] }}
             〜
             {{ project.test_t.end_ym.replace('-', '/') }} {{ decade_labels[project.test_t.end_decade] }}
+            <span class="field-help">（期間のみ）</span>
           {% else %}
             —
           {% endif %}

@@ -95,6 +95,27 @@
             </th>
             {% set ns.shown_name = true %}
           {% endif %}
+          {% if project.test_t_mode == 'effort' and project.integration %}
+            <td class="sticky-col col-phase">{{ project.integration.label }}</td>
+            <td class="sticky-col col-meta1 num" data-phase-total="{{ project.id }}-{{ project.integration.key }}">{{ '%.1f'|format(project.integration.total) }}</td>
+            <td class="sticky-col col-meta2 num" data-phase-allocated="{{ project.id }}-{{ project.integration.key }}">{{ '%.1f'|format(project.integration.allocated) }}</td>
+            <td class="sticky-col col-meta3 num {% if project.integration.diff != 0 %}warn{% endif %}" data-phase-diff="{{ project.id }}-{{ project.integration.key }}">{{ '%.1f'|format(project.integration.diff) }}</td>
+            {% for cell in project.integration.cells %}
+              <td class="test-t-cell {% if cell.effort %}active{% endif %}">
+                <input
+                  class="effort-input"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value="{{ '%.1f'|format(cell.effort) if cell.effort else '' }}"
+                  data-project-id="{{ project.id }}"
+                  data-phase="{{ project.integration.key }}"
+                  data-ym="{{ cell.ym }}"
+                  data-decade="{{ cell.decade }}"
+                >
+              </td>
+            {% endfor %}
+          {% else %}
           <td class="sticky-col col-phase">結合試験</td>
           <td class="sticky-col col-meta1" colspan="3">期間のみ</td>
           {% for cell in project.test_t_cells %}
@@ -102,6 +123,7 @@
               {% if cell.active %}●{% endif %}
             </td>
           {% endfor %}
+          {% endif %}
         </tr>
         {% for phase in project.phases if phase.key == 'release' %}
           <tr>

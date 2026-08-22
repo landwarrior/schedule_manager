@@ -208,6 +208,17 @@ h1 { margin: 0; font-size: 1.35rem; }
   align-items: end;
 }
 
+.mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.test-t-fields[hidden] {
+  display: none !important;
+}
+
 .stack-form {
   flex-direction: column;
   align-items: stretch;
@@ -391,6 +402,17 @@ fieldset {
   background: var(--test-bg);
   color: var(--test-text);
   font-weight: 700;
+}
+
+.test-t-cell .effort-input {
+  background: transparent;
+  color: var(--text);
+  font-weight: normal;
+}
+
+.test-t-cell.active .effort-input {
+  color: inherit;
+  font-weight: inherit;
 }
 
 .data-table { width: 100%; }

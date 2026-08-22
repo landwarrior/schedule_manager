@@ -6,6 +6,8 @@ from flask import Flask, flash, jsonify, redirect, render_template, request, url
 
 from calendar_util import (
     DECADE_LABELS,
+    INTEGRATION_LABEL,
+    INTEGRATION_PHASE,
     PHASES_WITH_EFFORT,
     allocation_status,
     business_days,
@@ -92,14 +94,24 @@ def _form_totals(form) -> dict[str, float]:
 
 
 def _form_test_t(form) -> dict:
+    mode = (form.get("test_t_mode") or "period").strip()
+    if mode not in ("period", "effort"):
+        raise ValueError("結合試験の入力方式が不正です")
     start_raw = (form.get("test_t_start_ym") or "").strip()
     end_raw = (form.get("test_t_end_ym") or "").strip()
     return {
+        "mode": mode,
         "start_ym": normalize_ym(start_raw) if start_raw else None,
         "start_decade": _parse_decade(form.get("test_t_start_decade")),
         "end_ym": normalize_ym(end_raw) if end_raw else None,
         "end_decade": _parse_decade(form.get("test_t_end_decade")),
     }
+
+
+def _form_totals_with_integration(form) -> dict[str, float]:
+    totals = _form_totals(form)
+    totals[INTEGRATION_PHASE] = _parse_effort(form.get(f"total_{INTEGRATION_PHASE}"))
+    return totals
 
 
 @app.route("/")
@@ -131,11 +143,16 @@ def schedule():
     }
 
     projects = list_projects()
+    projects_by_id = {project["id"]: project for project in projects}
     allocations = list_allocations(display_from, display_to)
     allocated_sums = allocated_totals_by_project_phase()
 
     period_totals: dict[tuple[str, int], float] = {(ym, d): 0.0 for ym, d in columns}
     for (project_id, phase, ym, decade), effort in allocations.items():
+        if phase == INTEGRATION_PHASE:
+            project = projects_by_id.get(project_id)
+            if not project or project.get("test_t_mode") != "effort":
+                continue
         if (ym, decade) in period_totals:
             period_totals[(ym, decade)] = round_effort(
                 period_totals[(ym, decade)] + effort
@@ -143,6 +160,7 @@ def schedule():
 
     project_rows = []
     for project in projects:
+        test_t_mode = project.get("test_t_mode", "period")
         phases = []
         for phase_key, phase_label in PHASES_WITH_EFFORT:
             cells = []
@@ -170,22 +188,42 @@ def schedule():
 
         test_t = project["test_t"]
         test_t_cells = []
-        for ym, decade in columns:
-            active = is_period_in_range(
-                ym,
-                decade,
-                test_t.get("start_ym"),
-                test_t.get("start_decade"),
-                test_t.get("end_ym"),
-                test_t.get("end_decade"),
-            )
-            test_t_cells.append({"ym": ym, "decade": decade, "active": active})
+        integration = None
+        if test_t_mode == "effort":
+            phase_key = INTEGRATION_PHASE
+            cells = []
+            allocated = allocated_sums.get((project["id"], phase_key), 0.0)
+            total = project["totals"].get(phase_key, 0.0)
+            for ym, decade in columns:
+                effort = allocations.get((project["id"], phase_key, ym, decade), 0.0)
+                cells.append({"ym": ym, "decade": decade, "effort": effort})
+            integration = {
+                "key": phase_key,
+                "label": INTEGRATION_LABEL,
+                "total": total,
+                "allocated": round_effort(allocated),
+                "diff": round_effort(total - allocated),
+                "cells": cells,
+            }
+        else:
+            for ym, decade in columns:
+                active = is_period_in_range(
+                    ym,
+                    decade,
+                    test_t.get("start_ym"),
+                    test_t.get("start_decade"),
+                    test_t.get("end_ym"),
+                    test_t.get("end_decade"),
+                )
+                test_t_cells.append({"ym": ym, "decade": decade, "active": active})
 
         project_rows.append(
             {
                 "id": project["id"],
                 "name": project["name"],
+                "test_t_mode": test_t_mode,
                 "phases": phases,
+                "integration": integration,
                 "test_t_cells": test_t_cells,
             }
         )
@@ -297,7 +335,7 @@ def projects_new():
             name = (request.form.get("name") or "").strip()
             if not name:
                 raise ValueError("プロジェクト名は必須です")
-            totals = _form_totals(request.form)
+            totals = _form_totals_with_integration(request.form)
             test_t = _form_test_t(request.form)
             create_project(name, totals, test_t)
             flash("プロジェクトを作成しました", "ok")
@@ -324,7 +362,7 @@ def projects_edit(project_id: int):
             name = (request.form.get("name") or "").strip()
             if not name:
                 raise ValueError("プロジェクト名は必須です")
-            totals = _form_totals(request.form)
+            totals = _form_totals_with_integration(request.form)
             test_t = _form_test_t(request.form)
             update_project(project_id, name, totals, test_t)
             flash("プロジェクトを更新しました", "ok")

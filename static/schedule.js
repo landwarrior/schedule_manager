@@ -2,9 +2,15 @@
   const inputs = document.querySelectorAll(".effort-input");
 
   function syncEffortStyle(input, effort) {
+    const hasValue = Number(effort) > 0;
+    const testCell = input.closest(".test-t-cell");
+    if (testCell) {
+      testCell.classList.toggle("active", hasValue);
+      return;
+    }
     const cell = input.closest(".effort-cell");
     if (cell) {
-      cell.classList.toggle("has-effort", Number(effort) > 0);
+      cell.classList.toggle("has-effort", hasValue);
     }
   }
 
@@ -18,7 +24,16 @@
     // 0.1 increment check
     if (Math.abs(effort * 10 - Math.round(effort * 10)) > 1e-9) {
       input.classList.add("error");
-      alert("工数は 0.1 刻みで入力してください");
+      if (input.dataset.invalidAlertFor !== raw) {
+        input.dataset.invalidAlertFor = raw;
+        alert("工数は 0.1 刻みで入力してください");
+      }
+      return;
+    }
+    delete input.dataset.invalidAlertFor;
+
+    const normalized = raw === "" ? "" : effort.toFixed(1);
+    if (input.dataset.lastSaved === normalized) {
       return;
     }
 
@@ -43,6 +58,7 @@
       }
 
       input.value = data.effort ? data.effort.toFixed(1) : "";
+      input.dataset.lastSaved = input.value;
       syncEffortStyle(input, data.effort);
 
       const key = `${input.dataset.projectId}-${input.dataset.phase}`;
@@ -75,8 +91,12 @@
 
   inputs.forEach((input) => {
     let timer = null;
+    input.dataset.lastSaved = input.value.trim() === "" ? "" : input.value.trim();
     syncEffortStyle(input, input.value.trim() === "" ? 0 : Number(input.value));
-    input.addEventListener("change", () => saveInput(input));
+    input.addEventListener("change", () => {
+      clearTimeout(timer);
+      saveInput(input);
+    });
     input.addEventListener("input", () => {
       clearTimeout(timer);
       timer = setTimeout(() => saveInput(input), 500);

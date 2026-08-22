@@ -5,7 +5,14 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from calendar_util import PHASE_KEYS, is_valid_effort, round_effort
+from calendar_util import (
+    ALLOCATABLE_PHASES,
+    INTEGRATION_PHASE,
+    PHASE_KEYS,
+    TEST_T_MODES,
+    is_valid_effort,
+    round_effort,
+)
 from db import get_connection
 
 
@@ -65,7 +72,7 @@ def delete_holiday(date_str: str) -> None:
 def list_projects() -> list[dict[str, Any]]:
     with get_connection() as conn:
         projects = conn.execute(
-            "SELECT id, name, sort_order FROM projects ORDER BY sort_order, id"
+            "SELECT id, name, sort_order, test_t_mode FROM projects ORDER BY sort_order, id"
         ).fetchall()
         result: list[dict[str, Any]] = []
         for project in projects:
@@ -82,7 +89,13 @@ def list_projects() -> list[dict[str, Any]]:
                 (project["id"],),
             ).fetchone()
             item = dict(project)
+            item["test_t_mode"] = (
+                project["test_t_mode"]
+                if project["test_t_mode"] in TEST_T_MODES
+                else "period"
+            )
             item["totals"] = {key: totals.get(key, 0.0) for key in PHASE_KEYS}
+            item["totals"][INTEGRATION_PHASE] = totals.get(INTEGRATION_PHASE, 0.0)
             item["test_t"] = dict(test_t) if test_t else {
                 "start_ym": None,
                 "start_decade": None,
@@ -116,7 +129,12 @@ def create_project(
         )
         project_id = int(cur.lastrowid)
         _upsert_phase_totals(conn, project_id, totals)
+        _upsert_integration_total(conn, project_id, test_t.get("mode", "period"), totals)
         _upsert_test_t(conn, project_id, test_t)
+        conn.execute(
+            "UPDATE projects SET test_t_mode = ? WHERE id = ?",
+            (_normalize_test_t_mode(test_t.get("mode")), project_id),
+        )
         conn.commit()
         return project_id
 
@@ -133,7 +151,12 @@ def update_project(
             (name.strip(), project_id),
         )
         _upsert_phase_totals(conn, project_id, totals)
+        _upsert_integration_total(conn, project_id, test_t.get("mode", "period"), totals)
         _upsert_test_t(conn, project_id, test_t)
+        conn.execute(
+            "UPDATE projects SET test_t_mode = ? WHERE id = ?",
+            (_normalize_test_t_mode(test_t.get("mode")), project_id),
+        )
         conn.commit()
 
 
@@ -141,6 +164,12 @@ def delete_project(project_id: int) -> None:
     with get_connection() as conn:
         conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         conn.commit()
+
+
+def _normalize_test_t_mode(mode: str | None) -> str:
+    if mode in TEST_T_MODES:
+        return mode
+    return "period"
 
 
 def _upsert_phase_totals(
@@ -155,9 +184,37 @@ def _upsert_phase_totals(
         )
 
 
+def _upsert_integration_total(
+    conn: sqlite3.Connection,
+    project_id: int,
+    mode: str,
+    totals: dict[str, float],
+) -> None:
+    if _normalize_test_t_mode(mode) == "effort":
+        effort = round_effort(float(totals.get(INTEGRATION_PHASE, 0) or 0))
+        conn.execute(
+            "INSERT INTO phase_totals (project_id, phase, total_effort) VALUES (?, ?, ?) "
+            "ON CONFLICT(project_id, phase) DO UPDATE SET total_effort = excluded.total_effort",
+            (project_id, INTEGRATION_PHASE, effort),
+        )
+    else:
+        conn.execute(
+            "DELETE FROM phase_totals WHERE project_id = ? AND phase = ?",
+            (project_id, INTEGRATION_PHASE),
+        )
+        conn.execute(
+            "DELETE FROM allocations WHERE project_id = ? AND phase = ?",
+            (project_id, INTEGRATION_PHASE),
+        )
+
+
 def _upsert_test_t(
     conn: sqlite3.Connection, project_id: int, test_t: dict[str, Any]
 ) -> None:
+    mode = _normalize_test_t_mode(test_t.get("mode"))
+    if mode == "effort":
+        conn.execute("DELETE FROM test_t_period WHERE project_id = ?", (project_id,))
+        return
     start_ym = test_t.get("start_ym") or None
     end_ym = test_t.get("end_ym") or None
     start_decade = test_t.get("start_decade")
@@ -194,8 +251,14 @@ def list_allocations(
 def set_allocation(
     project_id: int, phase: str, year_month: str, decade: int, effort: float
 ) -> None:
-    if phase not in PHASE_KEYS:
+    if phase not in ALLOCATABLE_PHASES:
         raise ValueError("invalid phase")
+    if phase == INTEGRATION_PHASE:
+        project = get_project(project_id)
+        if project is None:
+            raise ValueError("project not found")
+        if project.get("test_t_mode") != "effort":
+            raise ValueError("invalid phase")
     if decade not in (1, 2, 3):
         raise ValueError("invalid decade")
     effort = round_effort(effort)

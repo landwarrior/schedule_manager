@@ -7,6 +7,9 @@ from datetime import date
 from typing import Iterable
 
 DECADE_LABELS = {1: "上旬", 2: "中旬", 3: "下旬"}
+INTEGRATION_PHASE = "integration"
+INTEGRATION_LABEL = "結合試験"
+TEST_T_MODES = ("period", "effort")
 PHASES_WITH_EFFORT = (
     ("design", "設計"),
     ("impl", "実装"),
@@ -14,6 +17,7 @@ PHASES_WITH_EFFORT = (
     ("release", "本番リリース"),
 )
 PHASE_KEYS = [key for key, _ in PHASES_WITH_EFFORT]
+ALLOCATABLE_PHASES = PHASE_KEYS + [INTEGRATION_PHASE]
 
 
 def decade_day_range(year: int, month: int, decade: int) -> tuple[int, int]:

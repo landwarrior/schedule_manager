@@ -78,10 +78,21 @@ def _ensure_settings_columns(conn: sqlite3.Connection) -> None:
         )
 
 
+def _ensure_project_columns(conn: sqlite3.Connection) -> None:
+    columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(projects)").fetchall()
+    }
+    if "test_t_mode" not in columns:
+        conn.execute(
+            "ALTER TABLE projects ADD COLUMN test_t_mode TEXT NOT NULL DEFAULT 'period'"
+        )
+
+
 def init_db() -> None:
     with get_connection() as conn:
         conn.executescript(SCHEMA)
         _ensure_settings_columns(conn)
+        _ensure_project_columns(conn)
         row = conn.execute("SELECT id FROM settings WHERE id = 1").fetchone()
         if row is None:
             conn.execute(
