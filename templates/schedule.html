@@ -54,8 +54,10 @@
           </td>
         </tr>
       {% endif %}
+    </tbody>
 
       {% for project in projects %}
+    <tbody class="project-block">
         {% set ns = namespace(shown_name=false) %}
         {% for phase in project.phases if phase.key != 'release' %}
           <tr>
@@ -93,7 +95,7 @@
             </th>
             {% set ns.shown_name = true %}
           {% endif %}
-          <td class="sticky-col col-phase">試験T</td>
+          <td class="sticky-col col-phase">結合試験</td>
           <td class="sticky-col col-meta1" colspan="3">期間のみ</td>
           {% for cell in project.test_t_cells %}
             <td class="test-t-cell {% if cell.active %}active{% endif %}">
@@ -124,26 +126,32 @@
             {% endfor %}
           </tr>
         {% endfor %}
-      {% endfor %}
     </tbody>
+      {% endfor %}
     <tfoot>
       <tr>
-        <th class="sticky-col" colspan="2">営業日</th>
-        <td class="sticky-col" colspan="3"></td>
+        <th class="sticky-col col-project" colspan="2">営業日</th>
+        <td class="sticky-col col-meta1"></td>
+        <td class="sticky-col col-meta2"></td>
+        <td class="sticky-col col-meta3"></td>
         {% for item in summary %}
           <td class="num" data-biz="{{ item.ym }}-{{ item.decade }}">{{ item.business_days }}</td>
         {% endfor %}
       </tr>
       <tr>
-        <th class="sticky-col" colspan="2">キャパ（人日）</th>
-        <td class="sticky-col" colspan="3"></td>
+        <th class="sticky-col col-project" colspan="2">キャパ（人日）</th>
+        <td class="sticky-col col-meta1"></td>
+        <td class="sticky-col col-meta2"></td>
+        <td class="sticky-col col-meta3"></td>
         {% for item in summary %}
           <td class="num" data-cap="{{ item.ym }}-{{ item.decade }}">{{ '%.1f'|format(item.capacity) }}</td>
         {% endfor %}
       </tr>
       <tr>
-        <th class="sticky-col" colspan="2">割当合計（人日）</th>
-        <td class="sticky-col" colspan="3"></td>
+        <th class="sticky-col col-project" colspan="2">割当合計（人日）</th>
+        <td class="sticky-col col-meta1"></td>
+        <td class="sticky-col col-meta2"></td>
+        <td class="sticky-col col-meta3"></td>
         {% for item in summary %}
           <td class="num {% if item.status == 'over' %}cap-over{% elif item.status == 'warn' %}cap-warn{% endif %}" data-sum="{{ item.ym }}-{{ item.decade }}">{{ '%.1f'|format(item.allocated) }}</td>
         {% endfor %}

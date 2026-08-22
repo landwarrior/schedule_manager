@@ -10,7 +10,7 @@ DECADE_LABELS = {1: "上旬", 2: "中旬", 3: "下旬"}
 PHASES_WITH_EFFORT = (
     ("design", "設計"),
     ("impl", "実装"),
-    ("unit", "単体・内部結合"),
+    ("unit", "単体テスト"),
     ("release", "本番リリース"),
 )
 PHASE_KEYS = [key for key, _ in PHASES_WITH_EFFORT]

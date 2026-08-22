@@ -91,7 +91,8 @@
       prev.type = "button";
       prev.className = "dp-nav";
       prev.textContent = "‹";
-      prev.addEventListener("click", () => {
+      prev.addEventListener("click", (e) => {
+        e.stopPropagation();
         viewYear -= 1;
         render();
       });
@@ -102,7 +103,8 @@
       next.type = "button";
       next.className = "dp-nav";
       next.textContent = "›";
-      next.addEventListener("click", () => {
+      next.addEventListener("click", (e) => {
+        e.stopPropagation();
         viewYear += 1;
         render();
       });
@@ -153,7 +155,8 @@
       prev.type = "button";
       prev.className = "dp-nav";
       prev.textContent = "‹";
-      prev.addEventListener("click", () => {
+      prev.addEventListener("click", (e) => {
+        e.stopPropagation();
         viewMonth -= 1;
         if (viewMonth < 0) {
           viewMonth = 11;
@@ -168,7 +171,8 @@
       next.type = "button";
       next.className = "dp-nav";
       next.textContent = "›";
-      next.addEventListener("click", () => {
+      next.addEventListener("click", (e) => {
+        e.stopPropagation();
         viewMonth += 1;
         if (viewMonth > 11) {
           viewMonth = 0;
@@ -220,6 +224,12 @@
           closePopup();
         });
         grid.appendChild(btn);
+      }
+      const totalCells = startPad + daysInMonth;
+      for (let i = totalCells; i < 42; i += 1) {
+        const empty = document.createElement("div");
+        empty.className = "dp-day empty";
+        grid.appendChild(empty);
       }
       popup.appendChild(grid);
     }
