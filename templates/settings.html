@@ -7,6 +7,13 @@
 
 <form method="post" class="stack-form">
   <label>
+    契約名
+    <input type="text" name="contract_name" maxlength="200"
+           value="{{ settings.contract_name or '' }}"
+           placeholder="例: ○○株式会社 基幹システム開発">
+    <span class="field-help">スケジュール画面の上部に表示されます。schedule.db を切り替えたときに、どの契約のデータか判別するために使います。</span>
+  </label>
+  <label>
     メンバー人数
     <input type="number" name="member_count" min="1" step="1" required
            value="{{ settings.member_count }}">

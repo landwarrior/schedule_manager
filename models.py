@@ -33,6 +33,7 @@ def get_settings() -> sqlite3.Row:
 
 
 def update_settings(
+    contract_name: str,
     member_count: int,
     display_from: str,
     display_to: str,
@@ -41,9 +42,9 @@ def update_settings(
 ) -> None:
     with get_connection() as conn:
         conn.execute(
-            "UPDATE settings SET member_count = ?, display_from = ?, display_to = ?, "
-            "safety_rate = ?, theme = ? WHERE id = 1",
-            (member_count, display_from, display_to, safety_rate, theme),
+            "UPDATE settings SET contract_name = ?, member_count = ?, display_from = ?, "
+            "display_to = ?, safety_rate = ?, theme = ? WHERE id = 1",
+            (contract_name, member_count, display_from, display_to, safety_rate, theme),
         )
         conn.commit()
 

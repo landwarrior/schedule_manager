@@ -199,6 +199,16 @@ a:hover { text-decoration: underline; }
 }
 
 h1 { margin: 0; font-size: 1.35rem; }
+
+.contract-header {
+  margin-bottom: 0.75rem;
+}
+
+.contract-header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
 .muted { color: var(--muted); margin: 0; }
 
 .flash-list {
@@ -431,6 +441,29 @@ fieldset {
   width: 4.2rem;
   text-align: right;
   padding: 0.2rem 0.3rem;
+}
+
+.effort-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.schedule-table tbody tr.row-editing .col-phase {
+  font-weight: 700;
+  color: var(--text);
+  box-shadow: inset 3px 0 0 var(--text);
+}
+
+.schedule-table tbody.project-block:has(tr.row-editing) .col-project a {
+  font-weight: 700;
+}
+
+.schedule-table tbody tr.row-editing .sticky-col.num {
+  font-weight: 700;
+}
+
+.schedule-table tbody tr.row-editing .sticky-col.num.warn {
+  color: var(--warn);
 }
 
 .effort-input.saving { outline: 2px solid var(--accent); }

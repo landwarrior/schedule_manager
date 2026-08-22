@@ -1,5 +1,23 @@
 (() => {
   const inputs = document.querySelectorAll(".effort-input");
+  let activeRow = null;
+
+  function setActiveRow(input) {
+    if (activeRow) {
+      activeRow.classList.remove("row-editing");
+    }
+    activeRow = input.closest("tr");
+    if (activeRow) {
+      activeRow.classList.add("row-editing");
+    }
+  }
+
+  function clearActiveRow() {
+    if (activeRow) {
+      activeRow.classList.remove("row-editing");
+      activeRow = null;
+    }
+  }
 
   function syncEffortStyle(input, effort) {
     const cell = input.closest(".phase-cell");
@@ -86,6 +104,14 @@
     let timer = null;
     input.dataset.lastSaved = input.value.trim() === "" ? "" : input.value.trim();
     syncEffortStyle(input, input.value.trim() === "" ? 0 : Number(input.value));
+    input.addEventListener("focus", () => setActiveRow(input));
+    input.addEventListener("blur", () => {
+      window.setTimeout(() => {
+        if (!document.activeElement?.classList.contains("effort-input")) {
+          clearActiveRow();
+        }
+      }, 0);
+    });
     input.addEventListener("change", () => {
       clearTimeout(timer);
       saveInput(input);

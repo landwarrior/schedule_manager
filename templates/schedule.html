@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% block title %}スケジュール — スケジュール管理{% endblock %}
 {% block content %}
+{% if contract_name %}
+<section class="contract-header">
+  <h1>{{ contract_name }}</h1>
+</section>
+{% endif %}
 <section class="toolbar">
   <form class="inline-form" method="get" action="{{ url_for('schedule') }}">
     <div class="range-control">

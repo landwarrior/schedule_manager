@@ -267,8 +267,11 @@ def schedule():
             }
         )
 
+    contract_name = (settings["contract_name"] or "").strip() if settings else ""
+
     return render_template(
         "schedule.html",
+        contract_name=contract_name,
         display_from=display_from,
         display_to=display_to,
         months=months,
@@ -519,7 +522,8 @@ def settings_page():
             if display_from > display_to:
                 raise ValueError("表示開始月は終了月以前にしてください")
             theme = _normalize_theme(request.form.get("theme"))
-            update_settings(member_count, display_from, display_to, safety_rate, theme)
+            contract_name = (request.form.get("contract_name") or "").strip()
+            update_settings(contract_name, member_count, display_from, display_to, safety_rate, theme)
             flash("設定を保存しました", "ok")
             return redirect(url_for("settings_page"))
         except ValueError as exc:

@@ -12,6 +12,7 @@ DB_PATH = Path(__file__).resolve().parent / "schedule.db"
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
+    contract_name TEXT NOT NULL DEFAULT '',
     member_count INTEGER NOT NULL DEFAULT 1,
     display_from TEXT NOT NULL DEFAULT '2026-01',
     display_to TEXT NOT NULL DEFAULT '2026-12',
@@ -134,6 +135,8 @@ def _ensure_project_phases_columns(conn: sqlite3.Connection) -> None:
 
 def _ensure_settings_columns(conn: sqlite3.Connection) -> None:
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(settings)").fetchall()}
+    if "contract_name" not in columns:
+        conn.execute("ALTER TABLE settings ADD COLUMN contract_name TEXT NOT NULL DEFAULT ''")
     if "safety_rate" not in columns:
         conn.execute("ALTER TABLE settings ADD COLUMN safety_rate REAL NOT NULL DEFAULT 80")
     if "theme" not in columns:
