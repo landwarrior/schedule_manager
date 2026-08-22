@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{% if mode == 'new' %}新規プロジェクト{% else %}プロジェクト編集{% endif %} — スケジュール管理{% endblock %}
 {% block content %}
-{% set test_t_mode = project.test_t_mode if project else 'period' %}
 <section class="toolbar">
   <h1>{% if mode == 'new' %}新規プロジェクト{% else %}プロジェクト編集{% endif %}</h1>
 </section>
@@ -13,73 +12,75 @@
   </label>
 
   <fieldset>
-    <legend>総工数（人日・0.1刻み）</legend>
-    {% for key, label in phases %}
-      <label>
-        {{ label }}
-        <input type="number" name="total_{{ key }}" min="0" step="0.1"
-               value="{{ '%.1f'|format(project.totals[key]) if project else '0.0' }}">
-      </label>
-    {% endfor %}
-  </fieldset>
-
-  <fieldset>
-    <legend>結合試験</legend>
-    <div class="mode-row">
-      <label>
-        <input type="radio" name="test_t_mode" value="period" {% if test_t_mode == 'period' %}checked{% endif %}>
-        期間のみ（外部委託など）
-      </label>
-      <label>
-        <input type="radio" name="test_t_mode" value="effort" {% if test_t_mode == 'effort' %}checked{% endif %}>
-        工数入力（自社実施）
-      </label>
-    </div>
-
-    <div id="test-t-period-fields" class="test-t-fields">
-      <p class="field-help">開始旬〜終了旬の期間を表示します（工数は入力しません）。</p>
-      <div class="period-row">
-        <label>
-          開始月
-          <input type="text" name="test_t_start_ym" data-datepicker="month" placeholder="YYYY-MM"
-                 value="{{ project.test_t.start_ym if project and project.test_t.start_ym else '' }}">
-        </label>
-        <label>
-          開始旬
-          <select name="test_t_start_decade">
-            <option value="">—</option>
-            {% for d, label in decade_labels.items() %}
-              <option value="{{ d }}"
-                {% if project and project.test_t.start_decade == d %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <span>〜</span>
-        <label>
-          終了月
-          <input type="text" name="test_t_end_ym" data-datepicker="month" placeholder="YYYY-MM"
-                 value="{{ project.test_t.end_ym if project and project.test_t.end_ym else '' }}">
-        </label>
-        <label>
-          終了旬
-          <select name="test_t_end_decade">
-            <option value="">—</option>
-            {% for d, label in decade_labels.items() %}
-              <option value="{{ d }}"
-                {% if project and project.test_t.end_decade == d %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </label>
-      </div>
-    </div>
-
-    <div id="test-t-effort-fields" class="test-t-fields">
-      <p class="field-help">他の工程と同様に、総工数と旬ごとの工数を入力します。</p>
-      <label>
-        結合試験 総工数（人日・0.1刻み）
-        <input type="number" name="total_integration" min="0" step="0.1"
-               value="{{ '%.1f'|format(project.totals.integration) if project else '0.0' }}">
-      </label>
+    <legend>工程設定</legend>
+    <p class="field-help">
+      工程の種類（期間のみ／工数入力・背景色）は<a href="{{ url_for('phases_page') }}">工程マスタ</a>で管理します。
+      ここでは<strong>表示する工程</strong>、表示順、総工数・期間を設定します。
+    </p>
+    <input type="hidden" name="phase_order" id="phase-order"
+           value="{{ project.phases | map(attribute='phase_id') | join(',') }}">
+    <div id="phase-config-list" class="phase-config-list">
+      {% for phase in project.phases %}
+        <div class="phase-config-item {% if not phase.enabled %}is-disabled{% endif %}" data-phase-id="{{ phase.phase_id }}">
+          <div class="phase-config-head">
+            <label class="phase-enabled-label">
+              <input type="checkbox" name="enabled_{{ phase.phase_id }}" value="1"
+                     class="phase-enabled-toggle"
+                     {% if phase.enabled %}checked{% endif %}>
+              <strong>{{ phase.name }}</strong>
+            </label>
+            <span class="field-help">
+              {{ phase_input_mode_label(phase.input_mode) }}
+              ／ {{ phase_color_labels[phase.color] }}
+            </span>
+            <span class="phase-order-actions">
+              <button type="button" class="secondary phase-move-up" aria-label="上へ">↑</button>
+              <button type="button" class="secondary phase-move-down" aria-label="下へ">↓</button>
+            </span>
+          </div>
+          <div class="phase-config-body">
+            {% if phase.input_mode == 'effort' %}
+              <label>
+                総工数（人日・0.1刻み）
+                <input type="number" name="total_{{ phase.phase_id }}" min="0" step="0.1"
+                       value="{{ '%.1f'|format(phase.total_effort) if phase.total_effort is not none else '0.0' }}">
+              </label>
+            {% else %}
+              <div class="period-row">
+                <label>
+                  開始月
+                  <input type="text" name="period_{{ phase.phase_id }}_start_ym" data-datepicker="month" placeholder="YYYY-MM"
+                         value="{{ phase.start_ym if phase.start_ym else '' }}">
+                </label>
+                <label>
+                  開始旬
+                  <select name="period_{{ phase.phase_id }}_start_decade">
+                    <option value="">—</option>
+                    {% for d, label in decade_labels.items() %}
+                      <option value="{{ d }}" {% if phase.start_decade == d %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <span>〜</span>
+                <label>
+                  終了月
+                  <input type="text" name="period_{{ phase.phase_id }}_end_ym" data-datepicker="month" placeholder="YYYY-MM"
+                         value="{{ phase.end_ym if phase.end_ym else '' }}">
+                </label>
+                <label>
+                  終了旬
+                  <select name="period_{{ phase.phase_id }}_end_decade">
+                    <option value="">—</option>
+                    {% for d, label in decade_labels.items() %}
+                      <option value="{{ d }}" {% if phase.end_decade == d %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
     </div>
   </fieldset>
 
@@ -93,22 +94,46 @@
 {% block scripts %}
 <script>
 (() => {
-  const form = document.getElementById("project-form");
-  if (!form) return;
+  const list = document.getElementById("phase-config-list");
+  const orderInput = document.getElementById("phase-order");
+  if (!list || !orderInput) return;
 
-  const periodFields = document.getElementById("test-t-period-fields");
-  const effortFields = document.getElementById("test-t-effort-fields");
-
-  function syncTestTFields() {
-    const mode = form.querySelector('input[name="test_t_mode"]:checked')?.value || "period";
-    periodFields.hidden = mode !== "period";
-    effortFields.hidden = mode !== "effort";
+  function syncOrder() {
+    const ids = [...list.querySelectorAll(".phase-config-item")].map(
+      (item) => item.dataset.phaseId
+    );
+    orderInput.value = ids.join(",");
   }
 
-  form.querySelectorAll('input[name="test_t_mode"]').forEach((input) => {
-    input.addEventListener("change", syncTestTFields);
+  function syncDisabledState(item) {
+    const checkbox = item.querySelector(".phase-enabled-toggle");
+    item.classList.toggle("is-disabled", !checkbox.checked);
+  }
+
+  list.querySelectorAll(".phase-config-item").forEach(syncDisabledState);
+
+  list.addEventListener("change", (event) => {
+    if (event.target.classList.contains("phase-enabled-toggle")) {
+      syncDisabledState(event.target.closest(".phase-config-item"));
+    }
   });
-  syncTestTFields();
+
+  list.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    const item = button.closest(".phase-config-item");
+    if (!item) return;
+    if (button.classList.contains("phase-move-up")) {
+      const prev = item.previousElementSibling;
+      if (prev) list.insertBefore(item, prev);
+      syncOrder();
+    }
+    if (button.classList.contains("phase-move-down")) {
+      const next = item.nextElementSibling;
+      if (next) list.insertBefore(next, item);
+      syncOrder();
+    }
+  });
 })();
 </script>
 {% endblock %}

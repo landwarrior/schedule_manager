@@ -7,17 +7,21 @@ from datetime import date
 from typing import Iterable
 
 DECADE_LABELS = {1: "上旬", 2: "中旬", 3: "下旬"}
-INTEGRATION_PHASE = "integration"
-INTEGRATION_LABEL = "結合試験"
-TEST_T_MODES = ("period", "effort")
-PHASES_WITH_EFFORT = (
-    ("design", "設計"),
-    ("impl", "実装"),
-    ("unit", "単体テスト"),
-    ("release", "本番リリース"),
+PHASE_INPUT_MODES = ("period", "effort")
+PHASE_COLORS = ("cyan", "orange", "green", "lavender")
+PHASE_COLOR_LABELS = {
+    "cyan": "水色",
+    "orange": "橙色",
+    "green": "緑色",
+    "lavender": "藤色",
+}
+DEFAULT_PHASES = (
+    ("design", "設計", "effort", "cyan", 1),
+    ("impl", "実装", "effort", "cyan", 2),
+    ("unit", "単体テスト", "effort", "cyan", 3),
+    ("integration", "結合試験", "period", "orange", 4),
+    ("release", "本番リリース", "effort", "cyan", 5),
 )
-PHASE_KEYS = [key for key, _ in PHASES_WITH_EFFORT]
-ALLOCATABLE_PHASES = PHASE_KEYS + [INTEGRATION_PHASE]
 
 
 def decade_day_range(year: int, month: int, decade: int) -> tuple[int, int]:
@@ -151,6 +155,17 @@ def round_effort(value: float) -> float:
 def is_valid_effort(value: float) -> bool:
     if value < 0:
         return False
-    # Allow 0.1 increments
     tenths = round(value * 10)
     return abs(value * 10 - tenths) < 1e-9
+
+
+def normalize_phase_input_mode(value: str | None) -> str:
+    if value in PHASE_INPUT_MODES:
+        return value
+    return "effort"
+
+
+def normalize_phase_color(value: str | None) -> str:
+    if value in PHASE_COLORS:
+        return value
+    return "cyan"

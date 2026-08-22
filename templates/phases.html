@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}工程 — スケジュール管理{% endblock %}
+{% block content %}
+<section class="toolbar">
+  <h1>工程マスタ</h1>
+</section>
+
+<p class="field-help">
+  工程の追加・削除、入力方式（期間のみ／工数入力）、背景色を管理します。
+  プロジェクトごとの表示／非表示は<a href="{{ url_for('projects_list') }}">プロジェクト設定</a>で切り替えます。
+</p>
+
+<table class="data-table phase-master-table">
+  <thead>
+    <tr>
+      <th>表示順</th>
+      <th>工程名</th>
+      <th>入力方式</th>
+      <th>背景色</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for phase in phases %}
+      <tr>
+        <td>
+          <input type="number" name="sort_order" min="0" step="1"
+                 value="{{ phase.sort_order }}" class="sort-order-input"
+                 form="phase-update-{{ phase.id }}">
+        </td>
+        <td>
+          <input type="text" name="name" required value="{{ phase.name }}"
+                 form="phase-update-{{ phase.id }}">
+        </td>
+        <td>
+          <select name="input_mode" form="phase-update-{{ phase.id }}">
+            {% for mode in phase_input_modes %}
+              <option value="{{ mode }}" {% if phase.input_mode == mode %}selected{% endif %}>
+                {{ phase_input_mode_label(mode) }}
+              </option>
+            {% endfor %}
+          </select>
+        </td>
+        <td>
+          <div class="phase-color-cell">
+            <select name="color" form="phase-update-{{ phase.id }}">
+              {% for color in phase_colors %}
+                <option value="{{ color }}" {% if phase.color == color %}selected{% endif %}>
+                  {{ phase_color_labels[color] }}
+                </option>
+              {% endfor %}
+            </select>
+            <span class="color-sample color-{{ phase.color }}" aria-hidden="true"></span>
+          </div>
+        </td>
+        <td class="actions">
+          <button type="submit" form="phase-update-{{ phase.id }}">更新</button>
+          <button type="submit" form="phase-delete-{{ phase.id }}" class="danger"
+                  onclick="return confirm('この工程を削除しますか？関連する工数・期間も削除されます。');">
+            削除
+          </button>
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% for phase in phases %}
+  <form id="phase-update-{{ phase.id }}" method="post" hidden>
+    <input type="hidden" name="action" value="update">
+    <input type="hidden" name="phase_id" value="{{ phase.id }}">
+  </form>
+  <form id="phase-delete-{{ phase.id }}" method="post"
+        action="{{ url_for('phases_delete', phase_id=phase.id) }}" hidden></form>
+{% endfor %}
+
+<section class="stack-form phase-create-form">
+  <h2>工程を追加</h2>
+  <form method="post" class="inline-form">
+    <input type="hidden" name="action" value="create">
+    <label>
+      工程名
+      <input type="text" name="name" required placeholder="例: 受入試験">
+    </label>
+    <label>
+      入力方式
+      <select name="input_mode">
+        {% for mode in phase_input_modes %}
+          <option value="{{ mode }}">{{ phase_input_mode_label(mode) }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      背景色
+      <select name="color">
+        {% for color in phase_colors %}
+          <option value="{{ color }}">{{ phase_color_labels[color] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">追加</button>
+  </form>
+</section>
+{% endblock %}

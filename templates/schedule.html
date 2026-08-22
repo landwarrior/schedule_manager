@@ -56,52 +56,24 @@
       {% endif %}
     </tbody>
 
-      {% for project in projects %}
+    {% for project in projects %}
     <tbody class="project-block">
-        {% set ns = namespace(shown_name=false) %}
-        {% for phase in project.phases if phase.key != 'release' %}
-          <tr>
-            {% if not ns.shown_name %}
-              <th class="sticky-col col-project" rowspan="{{ project.phases|length + 1 }}">
-                <a href="{{ url_for('projects_edit', project_id=project.id) }}">{{ project.name }}</a>
-              </th>
-              {% set ns.shown_name = true %}
-            {% endif %}
-            <td class="sticky-col col-phase">{{ phase.label }}</td>
-            <td class="sticky-col col-meta1 num" data-phase-total="{{ project.id }}-{{ phase.key }}">{{ '%.1f'|format(phase.total) }}</td>
-            <td class="sticky-col col-meta2 num" data-phase-allocated="{{ project.id }}-{{ phase.key }}">{{ '%.1f'|format(phase.allocated) }}</td>
-            <td class="sticky-col col-meta3 num {% if phase.diff != 0 %}warn{% endif %}" data-phase-diff="{{ project.id }}-{{ phase.key }}">{{ '%.1f'|format(phase.diff) }}</td>
-            {% for cell in phase.cells %}
-              <td class="effort-cell {% if cell.effort %}has-effort{% endif %}">
-                <input
-                  class="effort-input"
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value="{{ '%.1f'|format(cell.effort) if cell.effort else '' }}"
-                  data-project-id="{{ project.id }}"
-                  data-phase="{{ phase.key }}"
-                  data-ym="{{ cell.ym }}"
-                  data-decade="{{ cell.decade }}"
-                >
-              </td>
-            {% endfor %}
-          </tr>
-        {% endfor %}
-        <tr class="test-t-row">
+      {% set ns = namespace(shown_name=false) %}
+      {% for phase in project.phases %}
+        <tr>
           {% if not ns.shown_name %}
-            <th class="sticky-col col-project" rowspan="{{ project.phases|length + 1 }}">
+            <th class="sticky-col col-project" rowspan="{{ project.phase_count }}">
               <a href="{{ url_for('projects_edit', project_id=project.id) }}">{{ project.name }}</a>
             </th>
             {% set ns.shown_name = true %}
           {% endif %}
-          {% if project.test_t_mode == 'effort' and project.integration %}
-            <td class="sticky-col col-phase">{{ project.integration.label }}</td>
-            <td class="sticky-col col-meta1 num" data-phase-total="{{ project.id }}-{{ project.integration.key }}">{{ '%.1f'|format(project.integration.total) }}</td>
-            <td class="sticky-col col-meta2 num" data-phase-allocated="{{ project.id }}-{{ project.integration.key }}">{{ '%.1f'|format(project.integration.allocated) }}</td>
-            <td class="sticky-col col-meta3 num {% if project.integration.diff != 0 %}warn{% endif %}" data-phase-diff="{{ project.id }}-{{ project.integration.key }}">{{ '%.1f'|format(project.integration.diff) }}</td>
-            {% for cell in project.integration.cells %}
-              <td class="test-t-cell {% if cell.effort %}active{% endif %}">
+          <td class="sticky-col col-phase">{{ phase.name }}</td>
+          {% if phase.input_mode == 'effort' %}
+            <td class="sticky-col col-meta1 num" data-phase-total="{{ project.id }}-{{ phase.id }}">{{ '%.1f'|format(phase.total) }}</td>
+            <td class="sticky-col col-meta2 num" data-phase-allocated="{{ project.id }}-{{ phase.id }}">{{ '%.1f'|format(phase.allocated) }}</td>
+            <td class="sticky-col col-meta3 num {% if phase.diff != 0 %}warn{% endif %}" data-phase-diff="{{ project.id }}-{{ phase.id }}">{{ '%.1f'|format(phase.diff) }}</td>
+            {% for cell in phase.cells %}
+              <td class="phase-cell color-{{ phase.color }} {% if cell.active %}active{% endif %}">
                 <input
                   class="effort-input"
                   type="number"
@@ -109,47 +81,24 @@
                   step="0.1"
                   value="{{ '%.1f'|format(cell.effort) if cell.effort else '' }}"
                   data-project-id="{{ project.id }}"
-                  data-phase="{{ project.integration.key }}"
+                  data-phase-id="{{ phase.id }}"
                   data-ym="{{ cell.ym }}"
                   data-decade="{{ cell.decade }}"
                 >
               </td>
             {% endfor %}
           {% else %}
-          <td class="sticky-col col-phase">結合試験</td>
-          <td class="sticky-col col-meta1" colspan="3">期間のみ</td>
-          {% for cell in project.test_t_cells %}
-            <td class="test-t-cell {% if cell.active %}active{% endif %}">
-              {% if cell.active %}●{% endif %}
-            </td>
-          {% endfor %}
-          {% endif %}
-        </tr>
-        {% for phase in project.phases if phase.key == 'release' %}
-          <tr>
-            <td class="sticky-col col-phase">{{ phase.label }}</td>
-            <td class="sticky-col col-meta1 num" data-phase-total="{{ project.id }}-{{ phase.key }}">{{ '%.1f'|format(phase.total) }}</td>
-            <td class="sticky-col col-meta2 num" data-phase-allocated="{{ project.id }}-{{ phase.key }}">{{ '%.1f'|format(phase.allocated) }}</td>
-            <td class="sticky-col col-meta3 num {% if phase.diff != 0 %}warn{% endif %}" data-phase-diff="{{ project.id }}-{{ phase.key }}">{{ '%.1f'|format(phase.diff) }}</td>
+            <td class="sticky-col col-meta1" colspan="3">期間のみ</td>
             {% for cell in phase.cells %}
-              <td class="effort-cell {% if cell.effort %}has-effort{% endif %}">
-                <input
-                  class="effort-input"
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value="{{ '%.1f'|format(cell.effort) if cell.effort else '' }}"
-                  data-project-id="{{ project.id }}"
-                  data-phase="{{ phase.key }}"
-                  data-ym="{{ cell.ym }}"
-                  data-decade="{{ cell.decade }}"
-                >
+              <td class="phase-cell color-{{ phase.color }} {% if cell.active %}active{% endif %}">
+                {% if cell.active %}●{% endif %}
               </td>
             {% endfor %}
-          </tr>
-        {% endfor %}
-    </tbody>
+          {% endif %}
+        </tr>
       {% endfor %}
+    </tbody>
+    {% endfor %}
     <tfoot>
       <tr>
         <th class="sticky-col col-project" colspan="2">営業日</th>

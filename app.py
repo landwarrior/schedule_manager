@@ -6,9 +6,9 @@ from flask import Flask, flash, jsonify, redirect, render_template, request, url
 
 from calendar_util import (
     DECADE_LABELS,
-    INTEGRATION_LABEL,
-    INTEGRATION_PHASE,
-    PHASES_WITH_EFFORT,
+    PHASE_COLOR_LABELS,
+    PHASE_COLORS,
+    PHASE_INPUT_MODES,
     allocation_status,
     business_days,
     capacity,
@@ -23,17 +23,23 @@ from calendar_util import (
 from db import init_db
 from models import (
     add_holiday,
+    create_phase_definition,
     create_project,
     delete_holiday,
+    delete_phase_definition,
     delete_project,
+    get_phase_definition,
     get_project,
     get_settings,
     list_allocations,
     list_holiday_dates,
     list_holidays,
+    list_phase_definitions,
     list_projects,
     allocated_totals_by_project_phase,
+    phase_input_mode_label,
     set_allocation,
+    update_phase_definition,
     update_project,
     update_settings,
     update_theme,
@@ -68,6 +74,7 @@ def inject_theme():
         "ui_theme": theme,
         "theme_choices": THEME_CHOICES,
         "theme_labels": THEME_LABELS,
+        "phase_color_labels": PHASE_COLOR_LABELS,
     }
 
 
@@ -89,29 +96,86 @@ def _parse_decade(raw: str | None) -> int | None:
     return value
 
 
-def _form_totals(form) -> dict[str, float]:
-    return {key: _parse_effort(form.get(f"total_{key}")) for key, _ in PHASES_WITH_EFFORT}
+def _parse_project_phases(form) -> list[dict]:
+    order_raw = (form.get("phase_order") or "").strip()
+    if not order_raw:
+        raise ValueError("工程の並び順が不正です")
+    phase_ids = [int(part) for part in order_raw.split(",") if part.strip()]
+    if not phase_ids:
+        raise ValueError("工程の並び順が不正です")
+
+    configs: list[dict] = []
+    enabled_count = 0
+    for phase_id in phase_ids:
+        phase = get_phase_definition(phase_id)
+        if phase is None:
+            raise ValueError("工程が不正です")
+        enabled = form.get(f"enabled_{phase_id}") == "1"
+        if enabled:
+            enabled_count += 1
+        config: dict = {"phase_id": phase_id, "enabled": enabled}
+        if phase["input_mode"] == "effort":
+            config["total_effort"] = _parse_effort(form.get(f"total_{phase_id}"))
+        else:
+            start_raw = (form.get(f"period_{phase_id}_start_ym") or "").strip()
+            end_raw = (form.get(f"period_{phase_id}_end_ym") or "").strip()
+            config["start_ym"] = normalize_ym(start_raw) if start_raw else None
+            config["end_ym"] = normalize_ym(end_raw) if end_raw else None
+            config["start_decade"] = _parse_decade(form.get(f"period_{phase_id}_start_decade"))
+            config["end_decade"] = _parse_decade(form.get(f"period_{phase_id}_end_decade"))
+        configs.append(config)
+    if enabled_count == 0:
+        raise ValueError("表示する工程を1つ以上選んでください")
+    return configs
 
 
-def _form_test_t(form) -> dict:
-    mode = (form.get("test_t_mode") or "period").strip()
-    if mode not in ("period", "effort"):
-        raise ValueError("結合試験の入力方式が不正です")
-    start_raw = (form.get("test_t_start_ym") or "").strip()
-    end_raw = (form.get("test_t_end_ym") or "").strip()
-    return {
-        "mode": mode,
-        "start_ym": normalize_ym(start_raw) if start_raw else None,
-        "start_decade": _parse_decade(form.get("test_t_start_decade")),
-        "end_ym": normalize_ym(end_raw) if end_raw else None,
-        "end_decade": _parse_decade(form.get("test_t_end_decade")),
-    }
-
-
-def _form_totals_with_integration(form) -> dict[str, float]:
-    totals = _form_totals(form)
-    totals[INTEGRATION_PHASE] = _parse_effort(form.get(f"total_{INTEGRATION_PHASE}"))
-    return totals
+def _build_schedule_phase_rows(project: dict, columns, allocations, allocated_sums) -> list[dict]:
+    rows = []
+    for phase in project["phases"]:
+        if not phase.get("enabled", True):
+            continue
+        phase_id = phase["phase_id"]
+        if phase["input_mode"] == "effort":
+            cells = []
+            allocated = allocated_sums.get((project["id"], phase_id), 0.0)
+            total = float(phase["total_effort"] or 0.0)
+            for ym, decade in columns:
+                effort = allocations.get((project["id"], phase_id, ym, decade), 0.0)
+                cells.append({"ym": ym, "decade": decade, "effort": effort, "active": effort > 0})
+            rows.append(
+                {
+                    "id": phase_id,
+                    "name": phase["name"],
+                    "input_mode": "effort",
+                    "color": phase["color"],
+                    "total": total,
+                    "allocated": round_effort(allocated),
+                    "diff": round_effort(total - allocated),
+                    "cells": cells,
+                }
+            )
+        else:
+            cells = []
+            for ym, decade in columns:
+                active = is_period_in_range(
+                    ym,
+                    decade,
+                    phase.get("start_ym"),
+                    phase.get("start_decade"),
+                    phase.get("end_ym"),
+                    phase.get("end_decade"),
+                )
+                cells.append({"ym": ym, "decade": decade, "active": active})
+            rows.append(
+                {
+                    "id": phase_id,
+                    "name": phase["name"],
+                    "input_mode": "period",
+                    "color": phase["color"],
+                    "cells": cells,
+                }
+            )
+    return rows
 
 
 @app.route("/")
@@ -143,16 +207,11 @@ def schedule():
     }
 
     projects = list_projects()
-    projects_by_id = {project["id"]: project for project in projects}
     allocations = list_allocations(display_from, display_to)
     allocated_sums = allocated_totals_by_project_phase()
 
     period_totals: dict[tuple[str, int], float] = {(ym, d): 0.0 for ym, d in columns}
-    for (project_id, phase, ym, decade), effort in allocations.items():
-        if phase == INTEGRATION_PHASE:
-            project = projects_by_id.get(project_id)
-            if not project or project.get("test_t_mode") != "effort":
-                continue
+    for (_project_id, _phase_id, ym, decade), effort in allocations.items():
         if (ym, decade) in period_totals:
             period_totals[(ym, decade)] = round_effort(
                 period_totals[(ym, decade)] + effort
@@ -160,71 +219,13 @@ def schedule():
 
     project_rows = []
     for project in projects:
-        test_t_mode = project.get("test_t_mode", "period")
-        phases = []
-        for phase_key, phase_label in PHASES_WITH_EFFORT:
-            cells = []
-            allocated = allocated_sums.get((project["id"], phase_key), 0.0)
-            total = project["totals"].get(phase_key, 0.0)
-            for ym, decade in columns:
-                effort = allocations.get((project["id"], phase_key, ym, decade), 0.0)
-                cells.append(
-                    {
-                        "ym": ym,
-                        "decade": decade,
-                        "effort": effort,
-                    }
-                )
-            phases.append(
-                {
-                    "key": phase_key,
-                    "label": phase_label,
-                    "total": total,
-                    "allocated": round_effort(allocated),
-                    "diff": round_effort(total - allocated),
-                    "cells": cells,
-                }
-            )
-
-        test_t = project["test_t"]
-        test_t_cells = []
-        integration = None
-        if test_t_mode == "effort":
-            phase_key = INTEGRATION_PHASE
-            cells = []
-            allocated = allocated_sums.get((project["id"], phase_key), 0.0)
-            total = project["totals"].get(phase_key, 0.0)
-            for ym, decade in columns:
-                effort = allocations.get((project["id"], phase_key, ym, decade), 0.0)
-                cells.append({"ym": ym, "decade": decade, "effort": effort})
-            integration = {
-                "key": phase_key,
-                "label": INTEGRATION_LABEL,
-                "total": total,
-                "allocated": round_effort(allocated),
-                "diff": round_effort(total - allocated),
-                "cells": cells,
-            }
-        else:
-            for ym, decade in columns:
-                active = is_period_in_range(
-                    ym,
-                    decade,
-                    test_t.get("start_ym"),
-                    test_t.get("start_decade"),
-                    test_t.get("end_ym"),
-                    test_t.get("end_decade"),
-                )
-                test_t_cells.append({"ym": ym, "decade": decade, "active": active})
-
+        phases = _build_schedule_phase_rows(project, columns, allocations, allocated_sums)
         project_rows.append(
             {
                 "id": project["id"],
                 "name": project["name"],
-                "test_t_mode": test_t_mode,
                 "phases": phases,
-                "integration": integration,
-                "test_t_cells": test_t_cells,
+                "phase_count": len(phases),
             }
         )
 
@@ -263,18 +264,17 @@ def api_set_allocation():
     data = request.get_json(force=True, silent=True) or {}
     try:
         project_id = int(data["project_id"])
-        phase = data["phase"]
+        phase_id = int(data["phase_id"])
         year_month = data["year_month"]
         decade = int(data["decade"])
         effort = _parse_effort(str(data.get("effort", 0)))
         parse_ym(year_month)
-        set_allocation(project_id, phase, year_month, decade, effort)
+        set_allocation(project_id, phase_id, year_month, decade, effort)
     except (KeyError, TypeError, ValueError) as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
 
     settings = get_settings()
     holidays = list_holiday_dates()
-    # Recalculate period total for the changed cell using all projects in that period
     with_period = list_allocations(year_month, year_month)
     period_total = round_effort(
         sum(
@@ -291,8 +291,13 @@ def api_set_allocation():
     status = allocation_status(period_total, cap, safety_rate)
     allocated_sums = allocated_totals_by_project_phase()
     project = get_project(project_id)
-    phase_allocated = round_effort(allocated_sums.get((project_id, phase), 0.0))
-    phase_total = project["totals"].get(phase, 0.0) if project else 0.0
+    phase_total = 0.0
+    if project:
+        for phase in project["phases"]:
+            if phase["phase_id"] == phase_id:
+                phase_total = float(phase["total_effort"] or 0.0)
+                break
+    phase_allocated = round_effort(allocated_sums.get((project_id, phase_id), 0.0))
 
     return jsonify(
         {
@@ -323,8 +328,9 @@ def projects_list():
         "projects.html",
         projects=projects,
         allocated=allocated,
-        phases=PHASES_WITH_EFFORT,
+        phase_definitions=list_phase_definitions(),
         decade_labels=DECADE_LABELS,
+        phase_input_mode_label=phase_input_mode_label,
     )
 
 
@@ -335,19 +341,38 @@ def projects_new():
             name = (request.form.get("name") or "").strip()
             if not name:
                 raise ValueError("プロジェクト名は必須です")
-            totals = _form_totals_with_integration(request.form)
-            test_t = _form_test_t(request.form)
-            create_project(name, totals, test_t)
+            phase_configs = _parse_project_phases(request.form)
+            create_project(name, phase_configs)
             flash("プロジェクトを作成しました", "ok")
             return redirect(url_for("projects_list"))
         except ValueError as exc:
             flash(str(exc), "error")
+    phases = list_phase_definitions()
+    project = {
+        "name": "",
+        "phases": [
+            {
+                "phase_id": phase["id"],
+                "name": phase["name"],
+                "input_mode": phase["input_mode"],
+                "color": phase["color"],
+                "sort_order": index,
+                "enabled": True,
+                "total_effort": 0.0,
+                "start_ym": None,
+                "start_decade": None,
+                "end_ym": None,
+                "end_decade": None,
+            }
+            for index, phase in enumerate(phases)
+        ],
+    }
     return render_template(
         "project_form.html",
         mode="new",
-        project=None,
-        phases=PHASES_WITH_EFFORT,
+        project=project,
         decade_labels=DECADE_LABELS,
+        phase_input_mode_label=phase_input_mode_label,
     )
 
 
@@ -362,9 +387,8 @@ def projects_edit(project_id: int):
             name = (request.form.get("name") or "").strip()
             if not name:
                 raise ValueError("プロジェクト名は必須です")
-            totals = _form_totals_with_integration(request.form)
-            test_t = _form_test_t(request.form)
-            update_project(project_id, name, totals, test_t)
+            phase_configs = _parse_project_phases(request.form)
+            update_project(project_id, name, phase_configs)
             flash("プロジェクトを更新しました", "ok")
             return redirect(url_for("projects_list"))
         except ValueError as exc:
@@ -374,8 +398,8 @@ def projects_edit(project_id: int):
         "project_form.html",
         mode="edit",
         project=project,
-        phases=PHASES_WITH_EFFORT,
         decade_labels=DECADE_LABELS,
+        phase_input_mode_label=phase_input_mode_label,
     )
 
 
@@ -384,6 +408,51 @@ def projects_delete(project_id: int):
     delete_project(project_id)
     flash("プロジェクトを削除しました", "ok")
     return redirect(url_for("projects_list"))
+
+
+@app.route("/phases", methods=["GET", "POST"])
+def phases_page():
+    if request.method == "POST":
+        action = (request.form.get("action") or "").strip()
+        try:
+            if action == "create":
+                create_phase_definition(
+                    request.form.get("name") or "",
+                    request.form.get("input_mode") or "effort",
+                    request.form.get("color") or "cyan",
+                )
+                flash("工程を追加しました", "ok")
+            elif action == "update":
+                update_phase_definition(
+                    int(request.form.get("phase_id")),
+                    request.form.get("name") or "",
+                    request.form.get("input_mode") or "effort",
+                    request.form.get("color") or "cyan",
+                    int(request.form.get("sort_order") or "0"),
+                )
+                flash("工程を更新しました", "ok")
+            else:
+                raise ValueError("操作が不正です")
+        except ValueError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("phases_page"))
+    return render_template(
+        "phases.html",
+        phases=list_phase_definitions(),
+        phase_colors=PHASE_COLORS,
+        phase_input_modes=PHASE_INPUT_MODES,
+        phase_input_mode_label=phase_input_mode_label,
+    )
+
+
+@app.post("/phases/<int:phase_id>/delete")
+def phases_delete(phase_id: int):
+    try:
+        delete_phase_definition(phase_id)
+        flash("工程を削除しました", "ok")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("phases_page"))
 
 
 @app.route("/holidays", methods=["GET", "POST"])

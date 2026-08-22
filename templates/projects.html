@@ -10,38 +10,35 @@
   <thead>
     <tr>
       <th>名前</th>
-      {% for key, label in phases %}
-        <th>{{ label }}（総/割当）</th>
+      {% for phase in phase_definitions %}
+        <th>{{ phase.name }}</th>
       {% endfor %}
-      <th>結合試験</th>
       <th></th>
     </tr>
   </thead>
   <tbody>
     {% if not projects %}
-      <tr><td colspan="{{ 3 + phases|length }}" class="empty">プロジェクトがありません</td></tr>
+      <tr><td colspan="{{ 2 + phase_definitions|length }}" class="empty">プロジェクトがありません</td></tr>
     {% endif %}
     {% for project in projects %}
       <tr>
         <td><a href="{{ url_for('projects_edit', project_id=project.id) }}">{{ project.name }}</a></td>
-        {% for key, label in phases %}
-          {% set alloc = allocated.get((project.id, key), 0.0) %}
-          <td class="num">{{ '%.1f'|format(project.totals[key]) }} / {{ '%.1f'|format(alloc) }}</td>
+        {% for phase in project.phases %}
+          <td>
+            {% if not phase.enabled %}
+              <span class="field-help">非表示</span>
+            {% elif phase.input_mode == 'effort' %}
+              {% set alloc = allocated.get((project.id, phase.phase_id), 0.0) %}
+              <span class="num">{{ '%.1f'|format(phase.total_effort) }} / {{ '%.1f'|format(alloc) }}</span>
+            {% elif phase.start_ym and phase.end_ym %}
+              {{ phase.start_ym.replace('-', '/') }} {{ decade_labels[phase.start_decade] }}
+              〜
+              {{ phase.end_ym.replace('-', '/') }} {{ decade_labels[phase.end_decade] }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
         {% endfor %}
-        <td>
-          {% if project.test_t_mode == 'effort' %}
-            {% set alloc = allocated.get((project.id, 'integration'), 0.0) %}
-            <span class="num">{{ '%.1f'|format(project.totals.integration) }} / {{ '%.1f'|format(alloc) }}</span>
-            <span class="field-help">（工数入力）</span>
-          {% elif project.test_t.start_ym and project.test_t.end_ym %}
-            {{ project.test_t.start_ym.replace('-', '/') }} {{ decade_labels[project.test_t.start_decade] }}
-            〜
-            {{ project.test_t.end_ym.replace('-', '/') }} {{ decade_labels[project.test_t.end_decade] }}
-            <span class="field-help">（期間のみ）</span>
-          {% else %}
-            —
-          {% endif %}
-        </td>
         <td class="actions">
           <form method="post" action="{{ url_for('projects_delete', project_id=project.id) }}" onsubmit="return confirm('削除しますか？');">
             <button type="submit" class="danger">削除</button>

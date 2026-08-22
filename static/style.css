@@ -16,9 +16,14 @@ html[data-theme="system"] {
   --danger: #b91c1c;
   --warn: #b45309;
   --over-bg: #fecaca;
-  --effort-bg: #cdeef3;
-  --test-bg: #ffd8b8;
-  --test-text: #c2410c;
+  --phase-cyan-bg: #cdeef3;
+  --phase-cyan-text: #1a1a1a;
+  --phase-orange-bg: #ffd8b8;
+  --phase-orange-text: #c2410c;
+  --phase-green-bg: #d1fae5;
+  --phase-green-text: #166534;
+  --phase-lavender-bg: #ede9fe;
+  --phase-lavender-text: #5b21b6;
   --sticky-bg: #e8e8e8;
   --header-bg: #2f2f2f;
   --header-text: #ffffff;
@@ -54,9 +59,14 @@ html[data-theme="dark"] {
   --danger: #f87171;
   --warn: #fbbf24;
   --over-bg: #5c2222;
-  --effort-bg: #1f3d42;
-  --test-bg: #4a3424;
-  --test-text: #fdba74;
+  --phase-cyan-bg: #1f3d42;
+  --phase-cyan-text: #cfcfcf;
+  --phase-orange-bg: #4a3424;
+  --phase-orange-text: #fdba74;
+  --phase-green-bg: #14532d;
+  --phase-green-text: #bbf7d0;
+  --phase-lavender-bg: #3b3561;
+  --phase-lavender-text: #ddd6fe;
   --sticky-bg: #2e2e2e;
   --header-bg: #1a1a1a;
   --header-text: #d0d0d0;
@@ -92,9 +102,14 @@ html[data-theme="dark"] {
     --danger: #f87171;
     --warn: #fbbf24;
     --over-bg: #5c2222;
-    --effort-bg: #1f3d42;
-    --test-bg: #4a3424;
-    --test-text: #fdba74;
+    --phase-cyan-bg: #1f3d42;
+    --phase-cyan-text: #cfcfcf;
+    --phase-orange-bg: #4a3424;
+    --phase-orange-text: #fdba74;
+    --phase-green-bg: #14532d;
+    --phase-green-text: #bbf7d0;
+    --phase-lavender-bg: #3b3561;
+    --phase-lavender-text: #ddd6fe;
     --sticky-bg: #2e2e2e;
     --header-bg: #1a1a1a;
     --header-text: #d0d0d0;
@@ -377,12 +392,39 @@ fieldset {
   font-size: 0.8rem;
 }
 
-.effort-cell.has-effort {
-  background: var(--effort-bg);
+.phase-cell { text-align: center; color: transparent; }
+
+.phase-cell.color-cyan.active {
+  background: var(--phase-cyan-bg);
+  color: var(--phase-cyan-text);
 }
 
-.effort-cell.has-effort .effort-input {
+.phase-cell.color-orange.active {
+  background: var(--phase-orange-bg);
+  color: var(--phase-orange-text);
+}
+
+.phase-cell.color-green.active {
+  background: var(--phase-green-bg);
+  color: var(--phase-green-text);
+}
+
+.phase-cell.color-lavender.active {
+  background: var(--phase-lavender-bg);
+  color: var(--phase-lavender-text);
+}
+
+.phase-cell.active { font-weight: 700; }
+
+.phase-cell .effort-input {
   background: transparent;
+  color: var(--text);
+  font-weight: normal;
+}
+
+.phase-cell.active .effort-input {
+  color: inherit;
+  font-weight: inherit;
 }
 
 .effort-input {
@@ -397,26 +439,93 @@ fieldset {
   background: var(--error-bg);
 }
 
-.test-t-cell { text-align: center; color: transparent; }
-.test-t-cell.active {
-  background: var(--test-bg);
-  color: var(--test-text);
-  font-weight: 700;
-}
-
-.test-t-cell .effort-input {
-  background: transparent;
-  color: var(--text);
-  font-weight: normal;
-}
-
-.test-t-cell.active .effort-input {
-  color: inherit;
-  font-weight: inherit;
-}
-
 .data-table { width: 100%; }
 .actions form { margin: 0; }
+
+.phase-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.phase-config-item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: var(--input-bg);
+}
+
+.phase-config-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.phase-order-actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.phase-enabled-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.phase-config-item.is-disabled {
+  opacity: 0.55;
+}
+
+.phase-config-item.is-disabled .phase-config-body {
+  pointer-events: none;
+}
+
+.phase-config-body {
+  margin-top: 0.35rem;
+}
+
+.phase-master-table input[type="text"],
+.phase-master-table input[type="number"],
+.phase-master-table select {
+  width: 100%;
+  min-width: 0;
+}
+
+.phase-master-table .sort-order-input {
+  width: 4.5rem;
+}
+
+.phase-color-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.phase-color-cell select {
+  flex: 1;
+}
+
+.sort-order-input { width: 4rem; }
+
+.color-sample {
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.color-sample.color-cyan { background: var(--phase-cyan-bg); }
+.color-sample.color-orange { background: var(--phase-orange-bg); }
+.color-sample.color-green { background: var(--phase-green-bg); }
+.color-sample.color-lavender { background: var(--phase-lavender-bg); }
+
+.phase-create-form { margin-top: 1.5rem; }
 
 /* Date / month picker */
 .dp-field {

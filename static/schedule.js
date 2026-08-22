@@ -2,15 +2,9 @@
   const inputs = document.querySelectorAll(".effort-input");
 
   function syncEffortStyle(input, effort) {
-    const hasValue = Number(effort) > 0;
-    const testCell = input.closest(".test-t-cell");
-    if (testCell) {
-      testCell.classList.toggle("active", hasValue);
-      return;
-    }
-    const cell = input.closest(".effort-cell");
+    const cell = input.closest(".phase-cell");
     if (cell) {
-      cell.classList.toggle("has-effort", hasValue);
+      cell.classList.toggle("active", Number(effort) > 0);
     }
   }
 
@@ -21,7 +15,6 @@
       input.classList.add("error");
       return;
     }
-    // 0.1 increment check
     if (Math.abs(effort * 10 - Math.round(effort * 10)) > 1e-9) {
       input.classList.add("error");
       if (input.dataset.invalidAlertFor !== raw) {
@@ -46,7 +39,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           project_id: Number(input.dataset.projectId),
-          phase: input.dataset.phase,
+          phase_id: Number(input.dataset.phaseId),
           year_month: input.dataset.ym,
           decade: Number(input.dataset.decade),
           effort,
@@ -61,7 +54,7 @@
       input.dataset.lastSaved = input.value;
       syncEffortStyle(input, data.effort);
 
-      const key = `${input.dataset.projectId}-${input.dataset.phase}`;
+      const key = `${input.dataset.projectId}-${input.dataset.phaseId}`;
       const allocatedEl = document.querySelector(`[data-phase-allocated="${key}"]`);
       const diffEl = document.querySelector(`[data-phase-diff="${key}"]`);
       if (allocatedEl) allocatedEl.textContent = data.phase.allocated.toFixed(1);
