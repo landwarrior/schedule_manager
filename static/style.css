@@ -22,8 +22,8 @@ html[data-theme="system"] {
   --phase-orange-text: #c2410c;
   --phase-green-bg: #d1fae5;
   --phase-green-text: #166534;
-  --phase-lavender-bg: #ede9fe;
-  --phase-lavender-text: #5b21b6;
+  --phase-lavender-bg: #d8cff5;
+  --phase-lavender-text: #4c1d95;
   --sticky-bg: #e8e8e8;
   --header-bg: #2f2f2f;
   --header-text: #ffffff;
@@ -65,8 +65,8 @@ html[data-theme="dark"] {
   --phase-orange-text: #fdba74;
   --phase-green-bg: #14532d;
   --phase-green-text: #bbf7d0;
-  --phase-lavender-bg: #3b3561;
-  --phase-lavender-text: #ddd6fe;
+  --phase-lavender-bg: #5c5685;
+  --phase-lavender-text: #ede9fe;
   --sticky-bg: #2e2e2e;
   --header-bg: #1a1a1a;
   --header-text: #d0d0d0;
@@ -108,8 +108,8 @@ html[data-theme="dark"] {
     --phase-orange-text: #fdba74;
     --phase-green-bg: #14532d;
     --phase-green-text: #bbf7d0;
-    --phase-lavender-bg: #3b3561;
-    --phase-lavender-text: #ddd6fe;
+    --phase-lavender-bg: #5c5685;
+    --phase-lavender-text: #ede9fe;
     --sticky-bg: #2e2e2e;
     --header-bg: #1a1a1a;
     --header-text: #d0d0d0;
@@ -442,6 +442,52 @@ fieldset {
 .data-table { width: 100%; }
 .actions form { margin: 0; }
 
+.master-page {
+  max-width: 44rem;
+}
+
+.master-table-wrap {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.master-page .data-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.master-table th,
+.master-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.master-table .col-order { width: 5.5rem; }
+.master-table .col-date { width: 8.5rem; }
+.master-table .col-color { width: 11rem; }
+.master-table .col-actions { width: 9rem; }
+
+.master-add-panel {
+  margin-top: 0;
+}
+
+.master-add-panel h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.phase-create-form { margin-top: 1.5rem; }
+
+.holiday-create-form {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
 .phase-config-list {
   display: flex;
   flex-direction: column;
@@ -488,10 +534,55 @@ fieldset {
   margin-top: 0.35rem;
 }
 
+.phase-mode-row {
+  margin-bottom: 0.5rem;
+}
+
+.phase-effort-fields[hidden],
+.phase-period-fields[hidden] {
+  display: none !important;
+}
+
+.phase-order-form {
+  margin-bottom: 0.75rem;
+}
+
+.phase-master-table .phase-order-actions {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.holiday-master-table input[type="text"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.master-table .actions {
+  white-space: nowrap;
+}
+
+.master-table .actions button + button {
+  margin-left: 0.35rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .phase-master-table input[type="text"],
 .phase-master-table input[type="number"],
 .phase-master-table select {
   width: 100%;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -524,8 +615,6 @@ fieldset {
 .color-sample.color-orange { background: var(--phase-orange-bg); }
 .color-sample.color-green { background: var(--phase-green-bg); }
 .color-sample.color-lavender { background: var(--phase-lavender-bg); }
-
-.phase-create-form { margin-top: 1.5rem; }
 
 /* Date / month picker */
 .dp-field {

@@ -1,46 +1,69 @@
 {% extends "base.html" %}
-{% block title %}祝日 — スケジュール管理{% endblock %}
+{% block title %}祝日・休業日マスタ — スケジュール管理{% endblock %}
 {% block content %}
+<section class="master-page">
 <section class="toolbar">
-  <h1>祝日・休業日</h1>
+  <h1>祝日・休業日マスタ</h1>
 </section>
 
-<form method="post" class="inline-form">
-  <label>
-    日付
-    <input type="text" name="date" data-datepicker="date" placeholder="YYYY-MM-DD" required>
-  </label>
-  <label>
-    名称
-    <input type="text" name="name" placeholder="例: 元日">
-  </label>
-  <button type="submit">追加</button>
-</form>
+<p class="field-help">祝日や会社の休業日を登録します。日付だけ登録し、名称は後から一覧で編集できます。</p>
 
-<table class="data-table">
+<section class="stack-form master-add-panel holiday-create-form">
+  <h2>祝日・休業日を追加</h2>
+  <form method="post" class="inline-form">
+    <label>
+      日付
+      <input type="text" name="date" data-datepicker="date" placeholder="YYYY-MM-DD" required>
+    </label>
+    <label>
+      名称（任意）
+      <input type="text" name="name" placeholder="後から入力できます" autocomplete="off">
+    </label>
+    <button type="submit">追加</button>
+  </form>
+</section>
+
+<div class="master-table-wrap">
+<table class="data-table master-table holiday-master-table">
   <thead>
     <tr>
-      <th>日付</th>
+      <th class="col-date">日付</th>
       <th>名称</th>
-      <th></th>
+      <th class="col-actions">操作</th>
     </tr>
   </thead>
   <tbody>
     {% if not holidays %}
-      <tr><td colspan="3" class="empty">祝日は未登録です</td></tr>
+      <tr><td colspan="3" class="empty">祝日・休業日は未登録です</td></tr>
     {% endif %}
     {% for holiday in holidays %}
       <tr>
         <td>{{ holiday.date }}</td>
-        <td>{{ holiday.name or '—' }}</td>
+        <td>
+          <label class="sr-only" for="holiday-name-{{ holiday.date }}">名称</label>
+          <input type="text" id="holiday-name-{{ holiday.date }}" name="name"
+                 value="{{ holiday.name }}" placeholder="名称を入力"
+                 form="holiday-update-{{ holiday.date }}" autocomplete="off">
+        </td>
         <td class="actions">
-          <form method="post" action="{{ url_for('holidays_delete', date_str=holiday.date) }}"
-                onsubmit="return confirm('削除しますか？');">
-            <button type="submit" class="danger">削除</button>
-          </form>
+          <button type="submit" form="holiday-update-{{ holiday.date }}">更新</button>
+          <button type="submit" form="holiday-delete-{{ holiday.date }}" class="danger"
+                  onclick="return confirm('削除しますか？');">
+            削除
+          </button>
         </td>
       </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
+
+{% for holiday in holidays %}
+  <form id="holiday-update-{{ holiday.date }}" method="post"
+        action="{{ url_for('holidays_update', date_str=holiday.date) }}" hidden></form>
+  <form id="holiday-delete-{{ holiday.date }}" method="post"
+        action="{{ url_for('holidays_delete', date_str=holiday.date) }}" hidden></form>
+{% endfor %}
+
+</section>
 {% endblock %}

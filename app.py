@@ -8,7 +8,6 @@ from calendar_util import (
     DECADE_LABELS,
     PHASE_COLOR_LABELS,
     PHASE_COLORS,
-    PHASE_INPUT_MODES,
     allocation_status,
     business_days,
     capacity,
@@ -41,6 +40,8 @@ from models import (
     set_allocation,
     update_phase_definition,
     update_project,
+    reorder_phase_definitions,
+    update_holiday,
     update_settings,
     update_theme,
 )
@@ -114,7 +115,11 @@ def _parse_project_phases(form) -> list[dict]:
         if enabled:
             enabled_count += 1
         config: dict = {"phase_id": phase_id, "enabled": enabled}
-        if phase["input_mode"] == "effort":
+        mode_raw = (form.get(f"input_mode_{phase_id}") or "effort").strip()
+        if mode_raw not in ("period", "effort"):
+            raise ValueError("入力方式が不正です")
+        config["input_mode"] = mode_raw
+        if mode_raw == "effort":
             config["total_effort"] = _parse_effort(form.get(f"total_{phase_id}"))
         else:
             start_raw = (form.get(f"period_{phase_id}_start_ym") or "").strip()
@@ -354,10 +359,10 @@ def projects_new():
             {
                 "phase_id": phase["id"],
                 "name": phase["name"],
-                "input_mode": phase["input_mode"],
                 "color": phase["color"],
                 "sort_order": index,
                 "enabled": True,
+                "input_mode": "period" if phase.get("legacy_key") == "integration" else "effort",
                 "total_effort": 0.0,
                 "start_ym": None,
                 "start_decade": None,
@@ -418,7 +423,6 @@ def phases_page():
             if action == "create":
                 create_phase_definition(
                     request.form.get("name") or "",
-                    request.form.get("input_mode") or "effort",
                     request.form.get("color") or "cyan",
                 )
                 flash("工程を追加しました", "ok")
@@ -426,11 +430,14 @@ def phases_page():
                 update_phase_definition(
                     int(request.form.get("phase_id")),
                     request.form.get("name") or "",
-                    request.form.get("input_mode") or "effort",
                     request.form.get("color") or "cyan",
-                    int(request.form.get("sort_order") or "0"),
                 )
                 flash("工程を更新しました", "ok")
+            elif action == "reorder":
+                order_raw = (request.form.get("phase_order") or "").strip()
+                ordered_ids = [int(part) for part in order_raw.split(",") if part.strip()]
+                reorder_phase_definitions(ordered_ids)
+                flash("表示順を保存しました", "ok")
             else:
                 raise ValueError("操作が不正です")
         except ValueError as exc:
@@ -440,7 +447,6 @@ def phases_page():
         "phases.html",
         phases=list_phase_definitions(),
         phase_colors=PHASE_COLORS,
-        phase_input_modes=PHASE_INPUT_MODES,
         phase_input_mode_label=phase_input_mode_label,
     )
 
@@ -467,6 +473,17 @@ def holidays():
         except ValueError as exc:
             flash(str(exc), "error")
     return render_template("holidays.html", holidays=list_holidays())
+
+
+@app.post("/holidays/<date_str>/update")
+def holidays_update(date_str: str):
+    try:
+        name = (request.form.get("name") or "").strip()
+        update_holiday(date_str, name)
+        flash("祝日を更新しました", "ok")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("holidays"))
 
 
 @app.post("/holidays/<date_str>/delete")

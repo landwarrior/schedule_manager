@@ -1,45 +1,46 @@
 {% extends "base.html" %}
-{% block title %}工程 — スケジュール管理{% endblock %}
+{% block title %}工程マスタ — スケジュール管理{% endblock %}
 {% block content %}
+<section class="master-page">
 <section class="toolbar">
   <h1>工程マスタ</h1>
 </section>
 
 <p class="field-help">
-  工程の追加・削除、入力方式（期間のみ／工数入力）、背景色を管理します。
-  プロジェクトごとの表示／非表示は<a href="{{ url_for('projects_list') }}">プロジェクト設定</a>で切り替えます。
+  工程名と背景色を管理します。入力方式（期間のみ／工数入力）は
+  <a href="{{ url_for('projects_list') }}">プロジェクト設定</a>で工程ごとに指定します。
+  表示／非表示もプロジェクト設定で切り替えます。
 </p>
 
-<table class="data-table phase-master-table">
+<form method="post" id="phase-order-form" class="phase-order-form">
+  <input type="hidden" name="action" value="reorder">
+  <input type="hidden" name="phase_order" id="phase-order"
+         value="{{ phases | map(attribute='id') | join(',') }}">
+  <button type="submit">並び順を保存</button>
+</form>
+
+<div class="master-table-wrap">
+<table class="data-table master-table phase-master-table">
   <thead>
     <tr>
-      <th>表示順</th>
+      <th class="col-order">表示順</th>
       <th>工程名</th>
-      <th>入力方式</th>
-      <th>背景色</th>
-      <th>操作</th>
+      <th class="col-color">背景色</th>
+      <th class="col-actions">操作</th>
     </tr>
   </thead>
-  <tbody>
+  <tbody id="phase-master-list">
     {% for phase in phases %}
-      <tr>
+      <tr data-phase-id="{{ phase.id }}">
         <td>
-          <input type="number" name="sort_order" min="0" step="1"
-                 value="{{ phase.sort_order }}" class="sort-order-input"
-                 form="phase-update-{{ phase.id }}">
+          <span class="phase-order-actions">
+            <button type="button" class="secondary phase-move-up" aria-label="上へ">↑</button>
+            <button type="button" class="secondary phase-move-down" aria-label="下へ">↓</button>
+          </span>
         </td>
         <td>
           <input type="text" name="name" required value="{{ phase.name }}"
-                 form="phase-update-{{ phase.id }}">
-        </td>
-        <td>
-          <select name="input_mode" form="phase-update-{{ phase.id }}">
-            {% for mode in phase_input_modes %}
-              <option value="{{ mode }}" {% if phase.input_mode == mode %}selected{% endif %}>
-                {{ phase_input_mode_label(mode) }}
-              </option>
-            {% endfor %}
-          </select>
+                 form="phase-update-{{ phase.id }}" autocomplete="off">
         </td>
         <td>
           <div class="phase-color-cell">
@@ -64,6 +65,7 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 
 {% for phase in phases %}
   <form id="phase-update-{{ phase.id }}" method="post" hidden>
@@ -74,21 +76,13 @@
         action="{{ url_for('phases_delete', phase_id=phase.id) }}" hidden></form>
 {% endfor %}
 
-<section class="stack-form phase-create-form">
+<section class="stack-form master-add-panel phase-create-form">
   <h2>工程を追加</h2>
   <form method="post" class="inline-form">
     <input type="hidden" name="action" value="create">
     <label>
       工程名
-      <input type="text" name="name" required placeholder="例: 受入試験">
-    </label>
-    <label>
-      入力方式
-      <select name="input_mode">
-        {% for mode in phase_input_modes %}
-          <option value="{{ mode }}">{{ phase_input_mode_label(mode) }}</option>
-        {% endfor %}
-      </select>
+      <input type="text" name="name" required placeholder="例: 受入試験" autocomplete="off">
     </label>
     <label>
       背景色
@@ -101,4 +95,39 @@
     <button type="submit">追加</button>
   </form>
 </section>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  const list = document.getElementById("phase-master-list");
+  const orderInput = document.getElementById("phase-order");
+  if (!list || !orderInput) return;
+
+  function syncOrder() {
+    const ids = [...list.querySelectorAll("tr[data-phase-id]")].map(
+      (row) => row.dataset.phaseId
+    );
+    orderInput.value = ids.join(",");
+  }
+
+  list.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    const row = button.closest("tr[data-phase-id]");
+    if (!row) return;
+    if (button.classList.contains("phase-move-up")) {
+      const prev = row.previousElementSibling;
+      if (prev) list.insertBefore(row, prev);
+      syncOrder();
+    }
+    if (button.classList.contains("phase-move-down")) {
+      const next = row.nextElementSibling;
+      if (next) list.insertBefore(next, row);
+      syncOrder();
+    }
+  });
+})();
+</script>
 {% endblock %}

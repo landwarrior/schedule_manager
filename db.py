@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS project_phases (
     phase_id INTEGER NOT NULL,
     sort_order INTEGER NOT NULL DEFAULT 0,
     enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+    input_mode TEXT NOT NULL DEFAULT 'effort' CHECK (input_mode IN ('period', 'effort')),
     total_effort REAL NOT NULL DEFAULT 0,
     start_ym TEXT,
     start_decade INTEGER CHECK (start_decade IS NULL OR start_decade IN (1, 2, 3)),
@@ -98,6 +99,48 @@ def _ensure_project_phases_columns(conn: sqlite3.Connection) -> None:
     if "enabled" not in columns:
         conn.execute(
             "ALTER TABLE project_phases ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1"
+        )
+    columns = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(project_phases)").fetchall()
+    }
+    if "input_mode" not in columns:
+        conn.execute(
+            "ALTER TABLE project_phases ADD COLUMN input_mode TEXT NOT NULL DEFAULT 'effort'"
+        )
+        conn.execute(
+            """
+            UPDATE project_phases
+            SET input_mode = (
+                SELECT pd.input_mode FROM phase_definitions pd
+                WHERE pd.id = project_phases.phase_id
+            )
+            """
+        )
+        conn.execute(
+            """
+            UPDATE project_phases
+            SET input_mode = 'period'
+            WHERE start_ym IS NOT NULL AND end_ym IS NOT NULL
+            """
+        )
+        conn.execute(
+            """
+            UPDATE project_phases
+            SET input_mode = 'effort'
+            WHERE total_effort > 0
+            """
+        )
+        conn.execute(
+            """
+            UPDATE project_phases
+            SET input_mode = 'effort'
+            WHERE EXISTS (
+                SELECT 1 FROM allocations a
+                WHERE a.project_id = project_phases.project_id
+                  AND a.phase_id = project_phases.phase_id
+            )
+            """
         )
 
 
@@ -170,13 +213,6 @@ def _migrate_project_data(conn: sqlite3.Connection, legacy_map: dict[str, int]) 
             if row and row["test_t_mode"] in ("period", "effort"):
                 test_t_mode = row["test_t_mode"]
 
-        integration_id = legacy_map.get("integration")
-        if integration_id and test_t_mode == "effort":
-            conn.execute(
-                "UPDATE phase_definitions SET input_mode = 'effort' WHERE id = ?",
-                (integration_id,),
-            )
-
         phase_defs = conn.execute(
             "SELECT id, legacy_key, sort_order FROM phase_definitions ORDER BY sort_order, id"
         ).fetchall()
@@ -184,19 +220,24 @@ def _migrate_project_data(conn: sqlite3.Connection, legacy_map: dict[str, int]) 
             legacy_key = phase_def["legacy_key"] or ""
             total = float(totals.get(legacy_key, 0.0) or 0.0)
             start_ym = start_decade = end_ym = end_decade = None
-            if legacy_key == "integration" and test_t and test_t_mode == "period":
-                start_ym = test_t["start_ym"]
-                start_decade = test_t["start_decade"]
-                end_ym = test_t["end_ym"]
-                end_decade = test_t["end_decade"]
+            if legacy_key == "integration":
+                phase_input_mode = test_t_mode
+                if test_t and test_t_mode == "period":
+                    start_ym = test_t["start_ym"]
+                    start_decade = test_t["start_decade"]
+                    end_ym = test_t["end_ym"]
+                    end_decade = test_t["end_decade"]
+            else:
+                phase_input_mode = "effort"
             conn.execute(
                 "INSERT INTO project_phases "
-                "(project_id, phase_id, sort_order, enabled, total_effort, start_ym, start_decade, end_ym, end_decade) "
-                "VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)",
+                "(project_id, phase_id, sort_order, enabled, input_mode, total_effort, start_ym, start_decade, end_ym, end_decade) "
+                "VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)",
                 (
                     project_id,
                     phase_def["id"],
                     phase_def["sort_order"],
+                    phase_input_mode,
                     total,
                     start_ym,
                     start_decade,

@@ -61,6 +61,18 @@ def add_holiday(date_str: str, name: str) -> None:
         conn.commit()
 
 
+def update_holiday(date_str: str, name: str) -> None:
+    with get_connection() as conn:
+        row = conn.execute("SELECT date FROM holidays WHERE date = ?", (date_str,)).fetchone()
+        if row is None:
+            raise ValueError("祝日が見つかりません")
+        conn.execute(
+            "UPDATE holidays SET name = ? WHERE date = ?",
+            (name.strip(), date_str),
+        )
+        conn.commit()
+
+
 def delete_holiday(date_str: str) -> None:
     with get_connection() as conn:
         conn.execute("DELETE FROM holidays WHERE date = ?", (date_str,))
@@ -86,11 +98,10 @@ def get_phase_definition(phase_id: int) -> dict[str, Any] | None:
         return _phase_row(row) if row else None
 
 
-def create_phase_definition(name: str, input_mode: str, color: str) -> int:
+def create_phase_definition(name: str, color: str) -> int:
     name = name.strip()
     if not name:
         raise ValueError("工程名は必須です")
-    input_mode = normalize_phase_input_mode(input_mode)
     color = normalize_phase_color(color)
     with get_connection() as conn:
         max_order = conn.execute(
@@ -98,8 +109,8 @@ def create_phase_definition(name: str, input_mode: str, color: str) -> int:
         ).fetchone()["m"]
         cur = conn.execute(
             "INSERT INTO phase_definitions (name, input_mode, color, sort_order) "
-            "VALUES (?, ?, ?, ?)",
-            (name, input_mode, color, max_order + 1),
+            "VALUES (?, 'effort', ?, ?)",
+            (name, color, max_order + 1),
         )
         phase_id = int(cur.lastrowid)
         _attach_phase_to_all_projects(conn, phase_id, max_order + 1)
@@ -110,28 +121,40 @@ def create_phase_definition(name: str, input_mode: str, color: str) -> int:
 def update_phase_definition(
     phase_id: int,
     name: str,
-    input_mode: str,
     color: str,
-    sort_order: int,
 ) -> None:
     name = name.strip()
     if not name:
         raise ValueError("工程名は必須です")
-    input_mode = normalize_phase_input_mode(input_mode)
     color = normalize_phase_color(color)
     with get_connection() as conn:
-        prev = conn.execute(
-            "SELECT input_mode FROM phase_definitions WHERE id = ?", (phase_id,)
+        row = conn.execute(
+            "SELECT id FROM phase_definitions WHERE id = ?", (phase_id,)
         ).fetchone()
-        if prev is None:
+        if row is None:
             raise ValueError("工程が見つかりません")
         conn.execute(
-            "UPDATE phase_definitions SET name = ?, input_mode = ?, color = ?, sort_order = ? "
-            "WHERE id = ?",
-            (name, input_mode, color, sort_order, phase_id),
+            "UPDATE phase_definitions SET name = ?, color = ? WHERE id = ?",
+            (name, color, phase_id),
         )
-        if prev["input_mode"] != input_mode:
-            _sync_project_phase_mode(conn, phase_id, input_mode)
+        conn.commit()
+
+
+def reorder_phase_definitions(ordered_ids: list[int]) -> None:
+    if not ordered_ids:
+        raise ValueError("並び順が不正です")
+    with get_connection() as conn:
+        known = {
+            row["id"]
+            for row in conn.execute("SELECT id FROM phase_definitions").fetchall()
+        }
+        if set(ordered_ids) != known:
+            raise ValueError("並び順が不正です")
+        for index, phase_id in enumerate(ordered_ids):
+            conn.execute(
+                "UPDATE phase_definitions SET sort_order = ? WHERE id = ?",
+                (index, phase_id),
+            )
         conn.commit()
 
 
@@ -151,24 +174,41 @@ def _attach_phase_to_all_projects(
     for project in projects:
         conn.execute(
             "INSERT OR IGNORE INTO project_phases "
-            "(project_id, phase_id, sort_order, enabled, total_effort) VALUES (?, ?, ?, 0, 0)",
+            "(project_id, phase_id, sort_order, enabled, input_mode, total_effort) "
+            "VALUES (?, ?, ?, 0, 'effort', 0)",
             (project["id"], phase_id, sort_order),
         )
 
 
-def _sync_project_phase_mode(
-    conn: sqlite3.Connection, phase_id: int, input_mode: str
+def _default_input_mode(legacy_key: str | None) -> str:
+    if legacy_key == "integration":
+        return "period"
+    return "effort"
+
+
+def _clear_project_phase_mode_data(
+    conn: sqlite3.Connection,
+    project_id: int,
+    phase_id: int,
+    input_mode: str,
 ) -> None:
     if input_mode == "period":
         conn.execute(
-            "UPDATE project_phases SET total_effort = 0 WHERE phase_id = ?", (phase_id,)
+            "UPDATE project_phases SET total_effort = 0 "
+            "WHERE project_id = ? AND phase_id = ?",
+            (project_id, phase_id),
         )
-        conn.execute("DELETE FROM allocations WHERE phase_id = ?", (phase_id,))
+        conn.execute(
+            "DELETE FROM allocations "
+            "WHERE project_id = ? AND phase_id = ?",
+            (project_id, phase_id),
+        )
     else:
         conn.execute(
             "UPDATE project_phases SET start_ym = NULL, start_decade = NULL, "
-            "end_ym = NULL, end_decade = NULL WHERE phase_id = ?",
-            (phase_id,),
+            "end_ym = NULL, end_decade = NULL "
+            "WHERE project_id = ? AND phase_id = ?",
+            (project_id, phase_id),
         )
 
 
@@ -176,7 +216,6 @@ def _phase_row(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "id": row["id"],
         "name": row["name"],
-        "input_mode": normalize_phase_input_mode(row["input_mode"]),
         "color": normalize_phase_color(row["color"]),
         "sort_order": row["sort_order"],
         "legacy_key": row["legacy_key"],
@@ -191,13 +230,13 @@ def _load_project_phases(conn: sqlite3.Connection, project_id: int) -> list[dict
             pp.phase_id,
             pp.sort_order,
             pp.enabled,
+            pp.input_mode,
             pp.total_effort,
             pp.start_ym,
             pp.start_decade,
             pp.end_ym,
             pp.end_decade,
             pd.name,
-            pd.input_mode,
             pd.color
         FROM project_phases pp
         JOIN phase_definitions pd ON pd.id = pp.phase_id
@@ -213,13 +252,13 @@ def _load_project_phases(conn: sqlite3.Connection, project_id: int) -> list[dict
                 "phase_id": row["phase_id"],
                 "sort_order": row["sort_order"],
                 "enabled": bool(row["enabled"]),
+                "input_mode": normalize_phase_input_mode(row["input_mode"]),
                 "total_effort": row["total_effort"],
                 "start_ym": row["start_ym"],
                 "start_decade": row["start_decade"],
                 "end_ym": row["end_ym"],
                 "end_decade": row["end_decade"],
                 "name": row["name"],
-                "input_mode": normalize_phase_input_mode(row["input_mode"]),
                 "color": normalize_phase_color(row["color"]),
             }
         )
@@ -260,13 +299,15 @@ def get_project(project_id: int) -> dict[str, Any] | None:
 
 def _init_project_phases(conn: sqlite3.Connection, project_id: int) -> None:
     phase_defs = conn.execute(
-        "SELECT id, sort_order FROM phase_definitions ORDER BY sort_order, id"
+        "SELECT id, sort_order, legacy_key FROM phase_definitions ORDER BY sort_order, id"
     ).fetchall()
     for phase_def in phase_defs:
+        input_mode = _default_input_mode(phase_def["legacy_key"])
         conn.execute(
             "INSERT INTO project_phases "
-            "(project_id, phase_id, sort_order, enabled, total_effort) VALUES (?, ?, ?, 1, 0)",
-            (project_id, phase_def["id"], phase_def["sort_order"]),
+            "(project_id, phase_id, sort_order, enabled, input_mode, total_effort) "
+            "VALUES (?, ?, ?, 1, ?, 0)",
+            (project_id, phase_def["id"], phase_def["sort_order"], input_mode),
         )
 
 
@@ -301,21 +342,24 @@ def update_project(
 def _save_project_phases(
     conn: sqlite3.Connection, project_id: int, phase_configs: list[dict[str, Any]]
 ) -> None:
-    phase_defs = {
-        row["id"]: row
-        for row in conn.execute(
-            "SELECT id, input_mode FROM phase_definitions"
-        ).fetchall()
+    known_ids = {
+        row["id"] for row in conn.execute("SELECT id FROM phase_definitions").fetchall()
     }
     for index, config in enumerate(phase_configs):
         phase_id = int(config["phase_id"])
-        phase_def = phase_defs.get(phase_id)
-        if phase_def is None:
+        if phase_id not in known_ids:
             raise ValueError("工程が不正です")
-        input_mode = normalize_phase_input_mode(phase_def["input_mode"])
+        input_mode = normalize_phase_input_mode(config.get("input_mode", "effort"))
+        enabled = 1 if config.get("enabled", True) else 0
+        prev = conn.execute(
+            "SELECT input_mode FROM project_phases WHERE project_id = ? AND phase_id = ?",
+            (project_id, phase_id),
+        ).fetchone()
+        if prev and normalize_phase_input_mode(prev["input_mode"]) != input_mode:
+            _clear_project_phase_mode_data(conn, project_id, phase_id, input_mode)
+
         total_effort = 0.0
         start_ym = start_decade = end_ym = end_decade = None
-        enabled = 1 if config.get("enabled", True) else 0
         if input_mode == "effort":
             total_effort = round_effort(float(config.get("total_effort", 0) or 0))
         else:
@@ -326,12 +370,13 @@ def _save_project_phases(
             start_decade = int(start_decade) if start_decade else None
             end_decade = int(end_decade) if end_decade else None
         conn.execute(
-            "UPDATE project_phases SET sort_order = ?, enabled = ?, total_effort = ?, "
-            "start_ym = ?, start_decade = ?, end_ym = ?, end_decade = ? "
+            "UPDATE project_phases SET sort_order = ?, enabled = ?, input_mode = ?, "
+            "total_effort = ?, start_ym = ?, start_decade = ?, end_ym = ?, end_decade = ? "
             "WHERE project_id = ? AND phase_id = ?",
             (
                 index,
                 enabled,
+                input_mode,
                 total_effort,
                 start_ym,
                 start_decade,
@@ -355,14 +400,14 @@ def list_allocations(
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT a.project_id, a.phase_id, a.year_month, a.decade, a.effort, pd.input_mode
+            SELECT a.project_id, a.phase_id, a.year_month, a.decade, a.effort
             FROM allocations a
-            JOIN phase_definitions pd ON pd.id = a.phase_id
             JOIN project_phases pp
               ON pp.project_id = a.project_id
              AND pp.phase_id = a.phase_id
              AND pp.enabled = 1
-            WHERE a.year_month >= ? AND a.year_month <= ? AND pd.input_mode = 'effort'
+             AND pp.input_mode = 'effort'
+            WHERE a.year_month >= ? AND a.year_month <= ?
             """,
             (from_ym, to_ym),
         ).fetchall()
@@ -383,17 +428,14 @@ def set_allocation(
     if not is_valid_effort(effort):
         raise ValueError("effort must be in 0.1 increments")
     with get_connection() as conn:
-        phase = conn.execute(
-            "SELECT id, input_mode FROM phase_definitions WHERE id = ?",
-            (phase_id,),
-        ).fetchone()
-        if phase is None or phase["input_mode"] != "effort":
-            raise ValueError("invalid phase")
         linked = conn.execute(
-            "SELECT enabled FROM project_phases WHERE project_id = ? AND phase_id = ?",
+            "SELECT enabled, input_mode FROM project_phases "
+            "WHERE project_id = ? AND phase_id = ?",
             (project_id, phase_id),
         ).fetchone()
         if linked is None or not linked["enabled"]:
+            raise ValueError("invalid phase")
+        if linked["input_mode"] != "effort":
             raise ValueError("invalid phase")
         if effort == 0:
             conn.execute(
@@ -418,12 +460,11 @@ def allocated_totals_by_project_phase() -> dict[tuple[int, int], float]:
             """
             SELECT a.project_id, a.phase_id, COALESCE(SUM(a.effort), 0) AS total
             FROM allocations a
-            JOIN phase_definitions pd ON pd.id = a.phase_id
             JOIN project_phases pp
               ON pp.project_id = a.project_id
              AND pp.phase_id = a.phase_id
              AND pp.enabled = 1
-            WHERE pd.input_mode = 'effort'
+             AND pp.input_mode = 'effort'
             GROUP BY a.project_id, a.phase_id
             """
         ).fetchall()

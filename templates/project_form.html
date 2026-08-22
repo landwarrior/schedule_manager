@@ -14,8 +14,9 @@
   <fieldset>
     <legend>工程設定</legend>
     <p class="field-help">
-      工程の種類（期間のみ／工数入力・背景色）は<a href="{{ url_for('phases_page') }}">工程マスタ</a>で管理します。
-      ここでは<strong>表示する工程</strong>、表示順、総工数・期間を設定します。
+      工程名・背景色は<a href="{{ url_for('phases_page') }}">工程マスタ</a>、
+      祝日・休業日は<a href="{{ url_for('holidays') }}">祝日・休業日マスタ</a>で管理します。
+      ここでは<strong>表示する工程</strong>、<strong>入力方式</strong>（工数入力／期間のみ）、表示順、総工数・期間を設定します。
     </p>
     <input type="hidden" name="phase_order" id="phase-order"
            value="{{ project.phases | map(attribute='phase_id') | join(',') }}">
@@ -29,23 +30,35 @@
                      {% if phase.enabled %}checked{% endif %}>
               <strong>{{ phase.name }}</strong>
             </label>
-            <span class="field-help">
-              {{ phase_input_mode_label(phase.input_mode) }}
-              ／ {{ phase_color_labels[phase.color] }}
-            </span>
+            <span class="field-help">{{ phase_color_labels[phase.color] }}</span>
             <span class="phase-order-actions">
               <button type="button" class="secondary phase-move-up" aria-label="上へ">↑</button>
               <button type="button" class="secondary phase-move-down" aria-label="下へ">↓</button>
             </span>
           </div>
           <div class="phase-config-body">
-            {% if phase.input_mode == 'effort' %}
+            <div class="mode-row phase-mode-row">
+              <label>
+                <input type="radio" name="input_mode_{{ phase.phase_id }}" value="effort"
+                       class="phase-mode-toggle" data-target="effort"
+                       {% if phase.input_mode == 'effort' %}checked{% endif %}>
+                工数入力
+              </label>
+              <label>
+                <input type="radio" name="input_mode_{{ phase.phase_id }}" value="period"
+                       class="phase-mode-toggle" data-target="period"
+                       {% if phase.input_mode == 'period' %}checked{% endif %}>
+                期間のみ
+              </label>
+            </div>
+            <div class="phase-effort-fields" {% if phase.input_mode != 'effort' %}hidden{% endif %}>
               <label>
                 総工数（人日・0.1刻み）
                 <input type="number" name="total_{{ phase.phase_id }}" min="0" step="0.1"
                        value="{{ '%.1f'|format(phase.total_effort) if phase.total_effort is not none else '0.0' }}">
               </label>
-            {% else %}
+            </div>
+            <div class="phase-period-fields" {% if phase.input_mode != 'period' %}hidden{% endif %}>
               <div class="period-row">
                 <label>
                   開始月
@@ -77,7 +90,7 @@
                   </select>
                 </label>
               </div>
-            {% endif %}
+            </div>
           </div>
         </div>
       {% endfor %}
@@ -105,16 +118,32 @@
     orderInput.value = ids.join(",");
   }
 
+  function syncModeFields(item) {
+    const mode = item.querySelector('.phase-mode-toggle:checked')?.value || "effort";
+    const effortFields = item.querySelector(".phase-effort-fields");
+    const periodFields = item.querySelector(".phase-period-fields");
+    if (effortFields) effortFields.hidden = mode !== "effort";
+    if (periodFields) periodFields.hidden = mode !== "period";
+  }
+
   function syncDisabledState(item) {
     const checkbox = item.querySelector(".phase-enabled-toggle");
     item.classList.toggle("is-disabled", !checkbox.checked);
   }
 
-  list.querySelectorAll(".phase-config-item").forEach(syncDisabledState);
+  list.querySelectorAll(".phase-config-item").forEach((item) => {
+    syncDisabledState(item);
+    syncModeFields(item);
+  });
 
   list.addEventListener("change", (event) => {
+    const item = event.target.closest(".phase-config-item");
+    if (!item) return;
     if (event.target.classList.contains("phase-enabled-toggle")) {
-      syncDisabledState(event.target.closest(".phase-config-item"));
+      syncDisabledState(item);
+    }
+    if (event.target.classList.contains("phase-mode-toggle")) {
+      syncModeFields(item);
     }
   });
 
