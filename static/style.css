@@ -599,6 +599,10 @@ legend {
   width: 4.2rem;
   text-align: right;
   padding: 0.2rem 0.3rem;
+  scroll-margin-left: calc(var(--sticky-cols-width, 29.6rem) + 4px);
+  scroll-margin-right: 4px;
+  scroll-margin-top: calc(var(--sticky-thead-height, 4rem) + 4px);
+  scroll-margin-bottom: 4px;
 }
 
 .effort-input:focus {

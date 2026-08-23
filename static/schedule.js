@@ -9,6 +9,7 @@
       return;
     }
     const header = table.querySelector("thead tr:first-child");
+    const thead = table.querySelector("thead");
     if (!header) {
       return;
     }
@@ -16,7 +17,8 @@
     const phase = header.querySelector(".col-phase");
     const meta1 = header.querySelector(".col-meta1");
     const meta2 = header.querySelector(".col-meta2");
-    if (!project || !phase || !meta1 || !meta2) {
+    const meta3 = header.querySelector(".col-meta3");
+    if (!project || !phase || !meta1 || !meta2 || !meta3) {
       return;
     }
 
@@ -24,6 +26,8 @@
     const phaseWidth = phase.getBoundingClientRect().width;
     const meta1Width = meta1.getBoundingClientRect().width;
     const meta2Width = meta2.getBoundingClientRect().width;
+    const meta3Width = meta3.getBoundingClientRect().width;
+    const stickyColsWidth = projectWidth + phaseWidth + meta1Width + meta2Width + meta3Width;
 
     table.style.setProperty("--sticky-left-phase", `${projectWidth}px`);
     table.style.setProperty("--sticky-left-meta1", `${projectWidth + phaseWidth}px`);
@@ -32,6 +36,10 @@
       "--sticky-left-meta3",
       `${projectWidth + phaseWidth + meta1Width + meta2Width}px`
     );
+    table.style.setProperty("--sticky-cols-width", `${stickyColsWidth}px`);
+    if (thead) {
+      table.style.setProperty("--sticky-thead-height", `${thead.getBoundingClientRect().height}px`);
+    }
   }
 
   function effortGrid() {
@@ -50,58 +58,54 @@
     return null;
   }
 
-  function stickyColumnsWidth(scrollRoot) {
-    const edge = scrollRoot.querySelector(".schedule-table .col-meta3");
-    if (!edge) {
-      return 0;
-    }
-    const rootRect = scrollRoot.getBoundingClientRect();
-    const edgeRect = edge.getBoundingClientRect();
-    return Math.max(0, edgeRect.right - rootRect.left);
-  }
-
   function scrollEffortIntoView(input) {
     const scrollRoot = input.closest(".table-scroll");
-    if (!scrollRoot) {
+    if (!scrollRoot || !table) {
       return;
     }
 
-    const stickyWidth = stickyColumnsWidth(scrollRoot);
+    const stickyWidth = Number.parseFloat(getComputedStyle(table).getPropertyValue("--sticky-cols-width")) || 0;
+    const stickyTop = Number.parseFloat(getComputedStyle(table).getPropertyValue("--sticky-thead-height")) || 0;
+    const pad = 4;
+
     const rootRect = scrollRoot.getBoundingClientRect();
     const inputRect = input.getBoundingClientRect();
-    const thead = scrollRoot.querySelector(".schedule-table thead");
-    const stickyTop = thead ? thead.getBoundingClientRect().height : 0;
+    const viewLeft = rootRect.left + scrollRoot.clientLeft + stickyWidth + pad;
+    const viewRight = rootRect.left + scrollRoot.clientLeft + scrollRoot.clientWidth - pad;
+    const viewTop = rootRect.top + scrollRoot.clientTop + stickyTop + pad;
+    const viewBottom = rootRect.top + scrollRoot.clientTop + scrollRoot.clientHeight - pad;
 
-    let nextTop = scrollRoot.scrollTop;
-    let nextLeft = scrollRoot.scrollLeft;
+    let deltaX = 0;
+    let deltaY = 0;
 
-    const visibleTop = rootRect.top + stickyTop;
-    if (inputRect.top < visibleTop) {
-      nextTop -= visibleTop - inputRect.top;
-    } else if (inputRect.bottom > rootRect.bottom) {
-      nextTop += inputRect.bottom - rootRect.bottom;
+    if (inputRect.left < viewLeft) {
+      deltaX = inputRect.left - viewLeft;
+    } else if (inputRect.right > viewRight) {
+      deltaX = inputRect.right - viewRight;
     }
 
-    const visibleLeft = rootRect.left + stickyWidth;
-    const pad = 4;
-    if (inputRect.left < visibleLeft + pad) {
-      nextLeft -= visibleLeft + pad - inputRect.left;
-    } else if (inputRect.right > rootRect.right - pad) {
-      nextLeft += inputRect.right + pad - rootRect.right;
+    if (inputRect.top < viewTop) {
+      deltaY = inputRect.top - viewTop;
+    } else if (inputRect.bottom > viewBottom) {
+      deltaY = inputRect.bottom - viewBottom;
     }
 
-    if (nextTop !== scrollRoot.scrollTop) {
-      scrollRoot.scrollTop = nextTop;
+    if (deltaX !== 0) {
+      scrollRoot.scrollLeft += deltaX;
     }
-    if (nextLeft !== scrollRoot.scrollLeft) {
-      scrollRoot.scrollLeft = nextLeft;
+    if (deltaY !== 0) {
+      scrollRoot.scrollTop += deltaY;
     }
   }
 
   function focusEffortInput(input) {
     input.focus({ preventScroll: true });
-    input.select();
     scrollEffortIntoView(input);
+    input.select();
+    // select() が固定列を無視してスクロールを戻すことがあるため、直後に再調整する
+    requestAnimationFrame(() => {
+      scrollEffortIntoView(input);
+    });
   }
 
   function moveEffortInput(input, rowDelta, colDelta) {
@@ -268,6 +272,7 @@
     input.addEventListener("focus", () => {
       setActiveRow(input);
       scrollEffortIntoView(input);
+      requestAnimationFrame(() => scrollEffortIntoView(input));
     });
     input.addEventListener("keydown", handleEffortKeydown);
     input.addEventListener("blur", () => {
