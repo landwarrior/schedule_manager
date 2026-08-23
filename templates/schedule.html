@@ -32,6 +32,18 @@
 
 <div class="table-scroll">
   <table class="schedule-table">
+    <colgroup>
+      <col class="col-project">
+      <col class="col-phase">
+      <col class="col-meta1">
+      <col class="col-meta2">
+      <col class="col-meta3">
+      {% for ym in months %}
+        {% for d in [1, 2, 3] %}
+          <col>
+        {% endfor %}
+      {% endfor %}
+    </colgroup>
     <thead>
       <tr>
         <th class="sticky-col col-project">プロジェクト</th>
@@ -40,18 +52,18 @@
         <th class="sticky-col col-meta2">割当済</th>
         <th class="sticky-col col-meta3">差分</th>
         {% for ym in months %}
-          <th colspan="3" class="month-head">{{ ym.replace('-', '/') }}</th>
+          <th colspan="3" class="month-head" data-ym="{{ ym }}">{{ ym.replace('-', '/') }}</th>
         {% endfor %}
       </tr>
       <tr>
-        <th class="sticky-col"></th>
-        <th class="sticky-col"></th>
-        <th class="sticky-col"></th>
-        <th class="sticky-col"></th>
-        <th class="sticky-col"></th>
+        <th class="sticky-col col-project"></th>
+        <th class="sticky-col col-phase"></th>
+        <th class="sticky-col col-meta1"></th>
+        <th class="sticky-col col-meta2"></th>
+        <th class="sticky-col col-meta3"></th>
         {% for ym in months %}
           {% for d in [1, 2, 3] %}
-            <th class="decade-head">{{ decade_labels[d] }}</th>
+            <th class="decade-head" data-ym="{{ ym }}" data-decade="{{ d }}">{{ decade_labels[d] }}</th>
           {% endfor %}
         {% endfor %}
       </tr>
@@ -73,7 +85,9 @@
         <tr>
           {% if not ns.shown_name %}
             <th class="sticky-col col-project" rowspan="{{ project.phase_count }}">
-              <a href="{{ url_for('projects_edit', project_id=project.id) }}">{{ project.name }}</a>
+              <div class="project-name">
+                <a href="{{ url_for('projects_edit', project_id=project.id) }}">{{ project.name }}</a>
+              </div>
             </th>
             {% set ns.shown_name = true %}
           {% endif %}

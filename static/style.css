@@ -450,12 +450,27 @@ legend {
   background: var(--surface);
 }
 
+.schedule-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
 .schedule-table th,
 .schedule-table td {
-  border: 1px solid var(--line);
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
   padding: 0.35rem 0.45rem;
   font-size: var(--font-size-schedule);
   white-space: nowrap;
+}
+
+.schedule-table tr > *:first-child {
+  border-left: 1px solid var(--line);
+}
+
+.schedule-table thead tr:first-child > * {
+  border-top: 1px solid var(--line);
 }
 
 .data-table th,
@@ -483,11 +498,39 @@ legend {
   z-index: 2;
 }
 
+.schedule-table col.col-phase { width: 8rem; }
+.schedule-table col.col-meta1,
+.schedule-table col.col-meta2,
+.schedule-table col.col-meta3 { width: 4.2rem; }
+
 .col-project { left: 0; min-width: 9rem; }
-.col-phase { left: 9rem; min-width: 8rem; }
-.col-meta1 { left: 17rem; min-width: 4.2rem; text-align: right; }
-.col-meta2 { left: 21.2rem; min-width: 4.2rem; text-align: right; }
-.col-meta3 { left: 25.4rem; min-width: 4.2rem; text-align: right; }
+.col-phase { left: var(--sticky-left-phase, 9rem); min-width: 8rem; }
+.col-meta1 { left: var(--sticky-left-meta1, 17rem); min-width: 4.2rem; text-align: right; }
+.col-meta2 { left: var(--sticky-left-meta2, 21.2rem); min-width: 4.2rem; text-align: right; }
+.col-meta3 { left: var(--sticky-left-meta3, 25.4rem); min-width: 4.2rem; text-align: right; }
+
+.schedule-table th.col-project:not([colspan]),
+.schedule-table td.col-project:not([colspan]) {
+  white-space: normal;
+  vertical-align: middle;
+}
+
+.schedule-table .project-name {
+  max-width: 12rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.schedule-table .col-phase:not([colspan]) { max-width: 8rem; }
+.schedule-table .col-meta1:not([colspan]),
+.schedule-table .col-meta2:not([colspan]),
+.schedule-table .col-meta3:not([colspan]) { max-width: 4.2rem; }
+
+.schedule-table th.col-phase,
+.schedule-table td.col-phase {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .schedule-table thead .sticky-col { z-index: 4; }
 
@@ -583,6 +626,17 @@ legend {
 
 .schedule-table tbody tr.row-editing .sticky-col.num.diff-over {
   color: var(--danger);
+}
+
+.schedule-table thead th.month-head.col-editing {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.schedule-table thead th.decade-head.col-editing {
+  font-weight: 700;
+  color: var(--text);
+  box-shadow: inset 0 -3px 0 var(--text);
 }
 
 .effort-input.saving { outline: 2px solid var(--accent); }
