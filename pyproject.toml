@@ -12,6 +12,9 @@ dependencies = [
 dev = [
     "ruff>=0.16.4",
 ]
+build = [
+    "pyinstaller>=6.0",
+]
 
 [tool.ruff]
 # Zed ビルトイン Ruff（0.16.4）と CLI の設定ずれを防ぐ
@@ -22,6 +25,7 @@ src = ["."]
 exclude = [
     ".venv",
     "**/__pycache__",
+    "*.spec",
 ]
 
 [tool.ruff.lint]
@@ -35,7 +39,18 @@ select = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app", "calendar_util", "db", "models"]
+known-first-party = ["app", "calendar_util", "db", "models", "paths"]
 
 [tool.ruff.format]
 quote-style = "double"
+
+[tool.pyright]
+exclude = [
+    ".venv",
+    "**/__pycache__",
+    "build",
+    "dist",
+]
+ignore = [
+    "**/*.spec",
+]

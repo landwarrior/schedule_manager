@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import argparse
+import threading
+import webbrowser
+
 from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
+from werkzeug.serving import make_server
 
 from calendar_util import (
     DECADE_LABELS,
@@ -19,7 +24,7 @@ from calendar_util import (
     parse_ym,
     round_effort,
 )
-from db import init_db
+from db import DB_PATH, init_db
 from models import (
     add_holiday,
     allocated_totals_by_project_phase,
@@ -46,8 +51,14 @@ from models import (
     update_settings,
     update_theme,
 )
+from paths import is_frozen, resource_root
 
-app = Flask(__name__)
+_ROOT = resource_root()
+app = Flask(
+    __name__,
+    template_folder=str(_ROOT / "templates"),
+    static_folder=str(_ROOT / "static"),
+)
 app.secret_key = "schedule-manager-local"
 init_db()
 
@@ -559,5 +570,62 @@ def settings_theme():
     return redirect(next_url)
 
 
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="スケジュール管理")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        metavar="N",
+        help="待ち受けポート（省略時は空きポートを自動割当）",
+    )
+    parser.add_argument(
+        "--browser",
+        action="store_true",
+        help="起動時にブラウザを開く",
+    )
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="起動時にブラウザを開かない",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+    host = "127.0.0.1"
+    port = 0 if args.port is None else args.port
+    if port < 0 or port > 65535:
+        print("ポートは 0〜65535 で指定してください。", flush=True)
+        return 2
+
+    open_browser = is_frozen()
+    if args.browser:
+        open_browser = True
+    if args.no_browser:
+        open_browser = False
+
+    server = make_server(host, port, app, threaded=True)
+    actual_port = server.server_port
+    url = f"http://{host}:{actual_port}/"
+
+    print("スケジュール管理を起動しました。", flush=True)
+    print(f"  URL: {url}", flush=True)
+    print(f"  DB:  {DB_PATH}", flush=True)
+    print("終了するには、このウィンドウを閉じるか Ctrl+C を押してください。", flush=True)
+
+    if open_browser:
+        threading.Timer(0.4, lambda: webbrowser.open(url)).start()
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n終了します。", flush=True)
+    finally:
+        server.server_close()
+    return 0
+
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    raise SystemExit(main())

@@ -11,23 +11,56 @@
 
 ## セットアップ（Windows）
 
+利用方法は次の 2 通りです。
+
+1. **実行ファイル（exe）を使う** … Python 不要。下の「配布物の入手」または自分でビルド
+2. **ソースから起動する** … 開発・改造向け
+
+### 配布物の入手（推奨）
+
+GitHub の **Releases** から `schedule_manager.exe` をダウンロードします。
+
+1. リポジトリページの右サイド（または上部）の **Releases** を開く
+2. 最新リリースの Assets から `schedule_manager.exe` を入手する
+3. 任意のフォルダに置き、ダブルクリックで起動する（同じフォルダに `schedule.db` が作られる）
+
+Windows の SmartScreen などで警告が出ることがあります。発行元が不明な未署名 exe ではよくある表示です。
+
+### ソースからの起動
+
 `python` コマンドではなく `py` ランチャーを使います。
 
-```powershell
-# プロジェクトフォルダに移動してからコマンドを実行します
+```bat
+REM プロジェクトフォルダに移動してからコマンドを実行します
 py -3.14 -m venv .venv
-.\.venv\Scripts\Activate
+.venv\Scripts\activate.bat
 pip install -r requirements.txt
 python app.py
 ```
 
 - venv 有効化後は、環境内の `python` / `pip` が使えます。
-- ブラウザで http://127.0.0.1:5000 を開きます。
+- 起動するとコンソールに URL（例: `http://127.0.0.1:xxxxx/`）が表示されます。ブラウザでその URL を開いてください（`--browser` で自動オープンも可）。
+- ポートは既定で空きポートを自動割当します。固定したい場合は `python app.py --port 5000` とします。
 - 初回起動時に `schedule.db`（SQLite）が自動作成されます。
+
+### 実行ファイル（exe）の作成
+
+Python 環境が無い PC 向けに、単一の exe を自分でビルドできます。
+
+```bat
+.venv\Scripts\activate.bat
+pip install "pyinstaller>=6.0"
+build_exe.bat
+```
+
+- 成果物は `dist\schedule_manager.exe` です（`schedule.db` は含まれません）。
+- exe を任意のフォルダにコピーして実行します。同じフォルダの `schedule.db` が使われ（無ければ新規作成）、起動時にブラウザが開きます。
+- **フォルダを分けて exe を複数起動**すれば、ポートは自動で別々に割り当てられ、スケジュールを並べて比較できます。
+- オプション: `schedule_manager.exe --port 5000` / `--no-browser`
 
 ## データベースの切り替え
 
-アプリが参照する DB は、プロジェクト直下の `schedule.db` です（`db.py` の `DB_PATH`）。  
+アプリが参照する DB は、**実行ファイル（または `app.py`）と同じフォルダ**の `schedule.db` です。  
 別データを確認したいときは、アプリを止めたうえでファイルをリネームして切り替えます。  
 以下は PowerShell 向けの手順です。Windows Terminal でコマンドプロンプトを使っている場合は、タブの `∨` から PowerShell を起動してください。
 
@@ -58,8 +91,9 @@ python app.py
 ```
 
 - `schedule.db` が無い状態で起動すると、空の DB が新規作成されます。
-- パス自体を変えたい場合は `db.py` の `DB_PATH` を編集してください。
+- ソース実行時のパスを変えたい場合は `paths.py` の `data_dir()` を編集してください。
 - 切り替えた DB がどの契約のデータか判別しやすくするため、**設定** 画面で **契約名** を登録しておくと、スケジュール画面の上部に表示されます。DB ごとに契約名を設定しておくことを推奨します。
+- exe 利用時は、比較したい DB ごとにフォルダを用意し、それぞれに `schedule_manager.exe` と `schedule.db` を置いて起動すると便利です。
 
 ## 画面ごとの機能
 

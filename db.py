@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
 
 from calendar_util import DEFAULT_PHASES
+from paths import data_dir
 
-DB_PATH = Path(__file__).resolve().parent / "schedule.db"
+DB_PATH = data_dir() / "schedule.db"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (
