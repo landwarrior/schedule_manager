@@ -125,28 +125,19 @@
     {% endfor %}
     <tfoot>
       <tr>
-        <th class="sticky-col col-project" colspan="2">営業日</th>
-        <td class="sticky-col col-meta1"></td>
-        <td class="sticky-col col-meta2"></td>
-        <td class="sticky-col col-meta3"></td>
+        <th class="sticky-col col-project summary-label" colspan="5">営業日</th>
         {% for item in summary %}
           <td class="num" data-biz="{{ item.ym }}-{{ item.decade }}">{{ item.business_days }}</td>
         {% endfor %}
       </tr>
       <tr>
-        <th class="sticky-col col-project" colspan="2">キャパ（人日）</th>
-        <td class="sticky-col col-meta1"></td>
-        <td class="sticky-col col-meta2"></td>
-        <td class="sticky-col col-meta3"></td>
+        <th class="sticky-col col-project summary-label" colspan="5">キャパ（人日）</th>
         {% for item in summary %}
           <td class="num" data-cap="{{ item.ym }}-{{ item.decade }}">{{ '%.1f'|format(item.capacity) }}</td>
         {% endfor %}
       </tr>
       <tr>
-        <th class="sticky-col col-project" colspan="2">割当合計（人日）</th>
-        <td class="sticky-col col-meta1"></td>
-        <td class="sticky-col col-meta2"></td>
-        <td class="sticky-col col-meta3"></td>
+        <th class="sticky-col col-project summary-label" colspan="5">割当合計（人日）</th>
         {% for item in summary %}
           <td class="num {% if item.status == 'over' %}cap-over{% elif item.status == 'warn' %}cap-warn{% endif %}" data-sum="{{ item.ym }}-{{ item.decade }}">{{ '%.1f'|format(item.allocated) }}</td>
         {% endfor %}

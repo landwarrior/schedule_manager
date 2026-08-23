@@ -539,6 +539,11 @@ legend {
   background: var(--sticky-bg);
 }
 
+.schedule-table tfoot .summary-label {
+  text-align: right;
+  font-weight: 600;
+}
+
 .schedule-table tbody.project-block:not(:last-of-type) > tr:last-child > * {
   border-bottom: 2px solid var(--project-divider);
 }
