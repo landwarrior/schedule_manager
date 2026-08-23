@@ -498,27 +498,30 @@ legend {
   z-index: 2;
 }
 
+.schedule-table col.col-project { width: 12rem; }
 .schedule-table col.col-phase { width: 8rem; }
 .schedule-table col.col-meta1,
 .schedule-table col.col-meta2,
 .schedule-table col.col-meta3 { width: 4.2rem; }
 
-.col-project { left: 0; min-width: 9rem; }
-.col-phase { left: var(--sticky-left-phase, 9rem); min-width: 8rem; }
-.col-meta1 { left: var(--sticky-left-meta1, 17rem); min-width: 4.2rem; text-align: right; }
-.col-meta2 { left: var(--sticky-left-meta2, 21.2rem); min-width: 4.2rem; text-align: right; }
-.col-meta3 { left: var(--sticky-left-meta3, 25.4rem); min-width: 4.2rem; text-align: right; }
+.col-project { left: 0; min-width: 12rem; }
+.col-phase { left: var(--sticky-left-phase, 12rem); min-width: 8rem; }
+.col-meta1 { left: var(--sticky-left-meta1, 20rem); min-width: 4.2rem; text-align: right; }
+.col-meta2 { left: var(--sticky-left-meta2, 24.2rem); min-width: 4.2rem; text-align: right; }
+.col-meta3 { left: var(--sticky-left-meta3, 28.4rem); min-width: 4.2rem; text-align: right; }
 
 .schedule-table th.col-project:not([colspan]),
 .schedule-table td.col-project:not([colspan]) {
+  width: 12rem;
+  max-width: 12rem;
   white-space: normal;
   vertical-align: middle;
 }
 
 .schedule-table .project-name {
-  max-width: 12rem;
+  max-width: 100%;
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .schedule-table .col-phase:not([colspan]) { max-width: 8rem; }
@@ -604,7 +607,7 @@ legend {
   width: 4.2rem;
   text-align: right;
   padding: 0.2rem 0.3rem;
-  scroll-margin-left: calc(var(--sticky-cols-width, 29.6rem) + 4px);
+  scroll-margin-left: calc(var(--sticky-cols-width, 32.6rem) + 4px);
   scroll-margin-right: 4px;
   scroll-margin-top: calc(var(--sticky-thead-height, 4rem) + 4px);
   scroll-margin-bottom: 4px;

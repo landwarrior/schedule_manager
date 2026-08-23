@@ -1,0 +1,7 @@
+# Default: LF for all text files
+* text=auto eol=lf
+
+# Windows batch files: keep CRLF in the repo (needed to run on cmd.exe,
+# including GitHub source ZIPs which skip checkout filters)
+*.bat -text
+*.cmd -text
