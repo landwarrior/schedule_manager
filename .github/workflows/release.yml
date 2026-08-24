@@ -1,0 +1,53 @@
+name: Release exe
+
+on:
+  push:
+    tags:
+      - "v*"
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-exe-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    # 既存タグから Release を作る場合も、タグ名が v* のときだけ動かす
+    if: |
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v'))
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt "pyinstaller>=6.0"
+
+      - name: Build exe
+        run: pyinstaller --noconfirm schedule_manager.spec
+
+      - name: Check exe exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath "dist\schedule_manager.exe")) {
+            throw "dist\schedule_manager.exe が見つかりません"
+          }
+
+      - name: Attach exe to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || github.ref_name }}
+          files: dist/schedule_manager.exe
+          fail_on_unmatched_files: true
