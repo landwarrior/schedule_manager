@@ -132,15 +132,17 @@ def capacity(ym: str, decade: int, holidays: Iterable[str], member_count: int) -
     return business_days(ym, decade, holidays) * member_count
 
 
-def allocation_status(allocated: float, capacity_value: float, safety_rate_percent: float) -> str:
+def allocation_status(
+    allocated: float, capacity_value: float, planned_utilization_percent: float
+) -> str:
     """Return '' | 'warn' | 'over' for capacity coloring.
 
     - over: allocated >= capacity
-    - warn: allocated > capacity * safety_rate / 100
+    - warn: allocated > capacity * planned_utilization / 100
     """
     allocated = round_effort(allocated)
     capacity_value = float(capacity_value)
-    threshold = round_effort(capacity_value * float(safety_rate_percent) / 100.0)
+    threshold = round_effort(capacity_value * float(planned_utilization_percent) / 100.0)
     if allocated >= capacity_value:
         return "over"
     if allocated > threshold:

@@ -231,7 +231,9 @@ def schedule():
     columns = [(ym, decade) for ym in months for decade in (1, 2, 3)]
     holidays = list_holiday_dates()
     member_count = settings["member_count"]
-    safety_rate = float(settings["safety_rate"] if settings["safety_rate"] is not None else 80)
+    planned_utilization = float(
+        settings["planned_utilization"] if settings["planned_utilization"] is not None else 80
+    )
 
     capacities = {
         (ym, decade): {
@@ -266,7 +268,7 @@ def schedule():
     for ym, decade in columns:
         cap = capacities[(ym, decade)]
         allocated = period_totals[(ym, decade)]
-        status = allocation_status(allocated, cap["capacity"], safety_rate)
+        status = allocation_status(allocated, cap["capacity"], planned_utilization)
         summary.append(
             {
                 "ym": ym,
@@ -275,7 +277,9 @@ def schedule():
                 "capacity": cap["capacity"],
                 "allocated": allocated,
                 "status": status,
-                "warn_threshold": round_effort(cap["capacity"] * safety_rate / 100.0),
+                "warn_threshold": round_effort(
+                    cap["capacity"] * planned_utilization / 100.0
+                ),
             }
         )
 
@@ -291,7 +295,7 @@ def schedule():
         projects=project_rows,
         summary=summary,
         member_count=member_count,
-        safety_rate=safety_rate,
+        planned_utilization=planned_utilization,
     )
 
 
@@ -317,8 +321,10 @@ def api_set_allocation():
     )
     cap = capacity(year_month, decade, holidays, settings["member_count"])
     biz = business_days(year_month, decade, holidays)
-    safety_rate = float(settings["safety_rate"] if settings["safety_rate"] is not None else 80)
-    status = allocation_status(period_total, cap, safety_rate)
+    planned_utilization = float(
+        settings["planned_utilization"] if settings["planned_utilization"] is not None else 80
+    )
+    status = allocation_status(period_total, cap, planned_utilization)
     allocated_sums = allocated_totals_by_project_phase()
     project = get_project(project_id)
     phase_total = 0.0
@@ -540,16 +546,23 @@ def settings_page():
             member_count = int(request.form.get("member_count") or "1")
             if member_count < 1:
                 raise ValueError("メンバー人数は 1 以上にしてください")
-            safety_rate = float(request.form.get("safety_rate") or "80")
-            if safety_rate <= 0 or safety_rate > 100:
-                raise ValueError("安全率は 1〜100 の範囲で指定してください")
+            planned_utilization = float(request.form.get("planned_utilization") or "80")
+            if planned_utilization <= 0 or planned_utilization > 100:
+                raise ValueError("計画稼働率は 1〜100 の範囲で指定してください")
             display_from = normalize_ym(request.form.get("display_from"))
             display_to = normalize_ym(request.form.get("display_to"))
             if display_from > display_to:
                 raise ValueError("表示開始月は終了月以前にしてください")
             theme = _normalize_theme(request.form.get("theme"))
             contract_name = (request.form.get("contract_name") or "").strip()
-            update_settings(contract_name, member_count, display_from, display_to, safety_rate, theme)
+            update_settings(
+                contract_name,
+                member_count,
+                display_from,
+                display_to,
+                planned_utilization,
+                theme,
+            )
             flash("設定を保存しました", "ok")
             return redirect(url_for("settings_page"))
         except ValueError as exc:

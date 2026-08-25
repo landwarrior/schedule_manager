@@ -19,10 +19,10 @@
            value="{{ settings.member_count }}">
   </label>
   <label>
-    安全率（%）
-    <input type="number" name="safety_rate" min="1" max="100" step="1" required
-           value="{{ '%.0f'|format(settings.safety_rate if settings.safety_rate is not none else 80) }}">
-    <span class="field-help">割当が「キャパ × 安全率」を超えると黄色、キャパに達すると赤色になります（既定 80%）</span>
+    計画稼働率（%）
+    <input type="number" name="planned_utilization" min="1" max="100" step="1" required
+           value="{{ '%.0f'|format(settings.planned_utilization if settings.planned_utilization is not none else 80) }}">
+    <span class="field-help">割当が「キャパ × 計画稼働率」を超えると黄色、キャパに達すると赤色になります（既定 80%）</span>
   </label>
   <label>
     デフォルト表示開始月

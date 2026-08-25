@@ -37,14 +37,14 @@ def update_settings(
     member_count: int,
     display_from: str,
     display_to: str,
-    safety_rate: float,
+    planned_utilization: float,
     theme: str,
 ) -> None:
     with get_connection() as conn:
         conn.execute(
             "UPDATE settings SET contract_name = ?, member_count = ?, display_from = ?, "
-            "display_to = ?, safety_rate = ?, theme = ? WHERE id = 1",
-            (contract_name, member_count, display_from, display_to, safety_rate, theme),
+            "display_to = ?, planned_utilization = ?, theme = ? WHERE id = 1",
+            (contract_name, member_count, display_from, display_to, planned_utilization, theme),
         )
         conn.commit()
 

@@ -22,8 +22,8 @@
   <div class="schedule-toolbar-notes muted">
     <p>
       メンバー人数: {{ member_count }}人 ／ キャパ = 営業日 × 人数 ／
-      安全率: {{ '%.0f'|format(safety_rate) }}%
-      （割当がキャパ×安全率を超えると黄、キャパ到達で赤）
+      計画稼働率: {{ '%.0f'|format(planned_utilization) }}%
+      （割当がキャパ×計画稼働率を超えると黄、キャパ到達で赤）
       ／ 差分 = 見積工数 − 割当済（プラスは割当不足、マイナスは見積が甘い）
       ／ 工数セルは矢印キーで移動
     </p>

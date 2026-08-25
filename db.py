@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS settings (
     member_count INTEGER NOT NULL DEFAULT 1,
     display_from TEXT NOT NULL DEFAULT '2026-01',
     display_to TEXT NOT NULL DEFAULT '2026-12',
-    safety_rate REAL NOT NULL DEFAULT 80,
+    planned_utilization REAL NOT NULL DEFAULT 80,
     theme TEXT NOT NULL DEFAULT 'system'
 );
 
@@ -137,8 +137,15 @@ def _ensure_settings_columns(conn: sqlite3.Connection) -> None:
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(settings)").fetchall()}
     if "contract_name" not in columns:
         conn.execute("ALTER TABLE settings ADD COLUMN contract_name TEXT NOT NULL DEFAULT ''")
-    if "safety_rate" not in columns:
-        conn.execute("ALTER TABLE settings ADD COLUMN safety_rate REAL NOT NULL DEFAULT 80")
+    if "planned_utilization" not in columns:
+        if "safety_rate" in columns:
+            conn.execute(
+                "ALTER TABLE settings RENAME COLUMN safety_rate TO planned_utilization"
+            )
+        else:
+            conn.execute(
+                "ALTER TABLE settings ADD COLUMN planned_utilization REAL NOT NULL DEFAULT 80"
+            )
     if "theme" not in columns:
         conn.execute("ALTER TABLE settings ADD COLUMN theme TEXT NOT NULL DEFAULT 'system'")
 
@@ -283,7 +290,7 @@ def init_db() -> None:
         if row is None:
             conn.execute(
                 "INSERT INTO settings "
-                "(id, member_count, display_from, display_to, safety_rate, theme) "
+                "(id, member_count, display_from, display_to, planned_utilization, theme) "
                 "VALUES (1, 1, '2026-01', '2026-12', 80, 'system')"
             )
         conn.commit()
