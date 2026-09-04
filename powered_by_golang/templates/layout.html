@@ -1,0 +1,47 @@
+{{define "head"}}
+<!DOCTYPE html>
+<html lang="ja" data-theme="{{.UITheme}}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="{{.BodyClass}}">
+  <header class="site-header">
+    <div class="brand"><a href="/">スケジュール管理</a></div>
+    <nav>
+      <a href="/">スケジュール</a>
+      <a href="/projects">プロジェクト</a>
+      <a href="/phases">工程マスタ</a>
+      <a href="/holidays">祝日・休業日マスタ</a>
+      <a href="/settings">設定</a>
+      <form class="theme-switcher" method="post" action="/settings/theme">
+        <input type="hidden" name="next" value="{{.RequestPath}}">
+        <label>
+          テーマ
+          <select name="theme" onchange="this.form.submit()" aria-label="カラーテーマ">
+            {{range .ThemeChoices}}
+              <option value="{{.}}" {{if eq $.UITheme .}}selected{{end}}>{{index $.ThemeLabels .}}</option>
+            {{end}}
+          </select>
+        </label>
+      </form>
+    </nav>
+  </header>
+  <main class="container">
+    {{if .Flash}}
+      <ul class="flash-list">
+        {{range .Flash}}
+          <li class="flash flash-{{.Category}}">{{.Message}}</li>
+        {{end}}
+      </ul>
+    {{end}}
+{{end}}
+
+{{define "foot"}}
+  </main>
+  <script src="/static/datepicker.js"></script>
+</body>
+</html>
+{{end}}

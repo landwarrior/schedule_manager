@@ -1,0 +1,172 @@
+{{define "project_form.html"}}
+{{template "head" .}}
+<section class="toolbar">
+  <h1>{{if eq .Mode "new"}}新規プロジェクト{{else}}プロジェクト編集{{end}}</h1>
+</section>
+
+<form method="post" class="stack-form stack-form-wide" id="project-form">
+  <label>
+    プロジェクト名
+    <input type="text" name="name" required value="{{.Project.Name}}">
+  </label>
+
+  <fieldset>
+    <legend>工程設定</legend>
+    <p class="field-help">
+      工程名・背景色は<a href="/phases">工程マスタ</a>、
+      祝日・休業日は<a href="/holidays">祝日・休業日マスタ</a>で管理します。
+      ここでは<strong>表示する工程</strong>、<strong>入力方式</strong>（工数入力／期間のみ）、表示順、見積工数・期間を設定します。
+    </p>
+    <input type="hidden" name="phase_order" id="phase-order"
+           value="{{joinIDs (phaseIDs .Project.Phases)}}">
+    <div id="phase-config-list" class="phase-config-list">
+      {{range $phase := .Project.Phases}}
+        <div class="phase-config-item {{if not $phase.Enabled}}is-disabled{{end}}" data-phase-id="{{$phase.PhaseID}}">
+          <div class="phase-config-head">
+            <strong class="phase-config-name">{{$phase.Name}}</strong>
+            <label class="phase-visibility-toggle">
+              <input type="checkbox" name="enabled_{{$phase.PhaseID}}" value="1"
+                     class="phase-enabled-toggle"
+                     {{if $phase.Enabled}}checked{{end}}>
+              <span class="phase-visibility-label">
+                <span class="when-on">スケジュールに表示</span>
+                <span class="when-off">スケジュールに非表示</span>
+              </span>
+            </label>
+            <span class="phase-order-actions">
+              <button type="button" class="secondary phase-move-up" aria-label="上へ">↑</button>
+              <button type="button" class="secondary phase-move-down" aria-label="下へ">↓</button>
+            </span>
+          </div>
+          <div class="phase-config-body">
+            <div class="mode-row phase-mode-row">
+              <label>
+                <input type="radio" name="input_mode_{{$phase.PhaseID}}" value="effort"
+                       class="phase-mode-toggle" data-target="effort"
+                       {{if eq $phase.InputMode "effort"}}checked{{end}}>
+                工数入力
+              </label>
+              <label>
+                <input type="radio" name="input_mode_{{$phase.PhaseID}}" value="period"
+                       class="phase-mode-toggle" data-target="period"
+                       {{if eq $phase.InputMode "period"}}checked{{end}}>
+                期間のみ
+              </label>
+            </div>
+            <div class="phase-effort-fields" {{if ne $phase.InputMode "effort"}}hidden{{end}}>
+              <label>
+                見積工数（人日・0.1刻み）
+                <input type="number" name="total_{{$phase.PhaseID}}" min="0" step="0.1"
+                       value="{{fmtEffort $phase.TotalEffort}}">
+                <span class="field-help">工程に見積もった工数。</span>
+              </label>
+            </div>
+            <div class="phase-period-fields" {{if ne $phase.InputMode "period"}}hidden{{end}}>
+              <div class="period-row">
+                <label class="period-field">
+                  <span class="period-field-label">開始月</span>
+                  <input type="text" name="period_{{$phase.PhaseID}}_start_ym" data-datepicker="month" placeholder="YYYY-MM"
+                         value="{{derefStr $phase.StartYM}}">
+                </label>
+                <label class="period-field">
+                  <span class="period-field-label">開始旬</span>
+                  <select name="period_{{$phase.PhaseID}}_start_decade">
+                    <option value="">—</option>
+                    {{range $d := decades}}
+                      <option value="{{$d}}" {{if eqIntPtr $phase.StartDecade $d}}selected{{end}}>{{decadeLabel $d}}</option>
+                    {{end}}
+                  </select>
+                </label>
+                <div class="period-sep" aria-hidden="true">
+                  <span class="period-field-label period-sep-spacer">開始月</span>
+                  <span class="period-sep-mark">〜</span>
+                </div>
+                <label class="period-field">
+                  <span class="period-field-label">終了月</span>
+                  <input type="text" name="period_{{$phase.PhaseID}}_end_ym" data-datepicker="month" placeholder="YYYY-MM"
+                         value="{{derefStr $phase.EndYM}}">
+                </label>
+                <label class="period-field">
+                  <span class="period-field-label">終了旬</span>
+                  <select name="period_{{$phase.PhaseID}}_end_decade">
+                    <option value="">—</option>
+                    {{range $d := decades}}
+                      <option value="{{$d}}" {{if eqIntPtr $phase.EndDecade $d}}selected{{end}}>{{decadeLabel $d}}</option>
+                    {{end}}
+                  </select>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      {{end}}
+    </div>
+  </fieldset>
+
+  <div class="form-actions">
+    <button type="submit">保存</button>
+    <a class="button secondary" href="/projects">戻る</a>
+  </div>
+</form>
+<script>
+(() => {
+  const list = document.getElementById("phase-config-list");
+  const orderInput = document.getElementById("phase-order");
+  if (!list || !orderInput) return;
+
+  function syncOrder() {
+    const ids = [...list.querySelectorAll(".phase-config-item")].map(
+      (item) => item.dataset.phaseId
+    );
+    orderInput.value = ids.join(",");
+  }
+
+  function syncModeFields(item) {
+    const mode = item.querySelector('.phase-mode-toggle:checked')?.value || "effort";
+    const effortFields = item.querySelector(".phase-effort-fields");
+    const periodFields = item.querySelector(".phase-period-fields");
+    if (effortFields) effortFields.hidden = mode !== "effort";
+    if (periodFields) periodFields.hidden = mode !== "period";
+  }
+
+  function syncDisabledState(item) {
+    const checkbox = item.querySelector(".phase-enabled-toggle");
+    item.classList.toggle("is-disabled", !checkbox.checked);
+  }
+
+  list.querySelectorAll(".phase-config-item").forEach((item) => {
+    syncDisabledState(item);
+    syncModeFields(item);
+  });
+
+  list.addEventListener("change", (event) => {
+    const item = event.target.closest(".phase-config-item");
+    if (!item) return;
+    if (event.target.classList.contains("phase-enabled-toggle")) {
+      syncDisabledState(item);
+    }
+    if (event.target.classList.contains("phase-mode-toggle")) {
+      syncModeFields(item);
+    }
+  });
+
+  list.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    const item = button.closest(".phase-config-item");
+    if (!item) return;
+    if (button.classList.contains("phase-move-up")) {
+      const prev = item.previousElementSibling;
+      if (prev) list.insertBefore(item, prev);
+      syncOrder();
+    }
+    if (button.classList.contains("phase-move-down")) {
+      const next = item.nextElementSibling;
+      if (next) list.insertBefore(next, item);
+      syncOrder();
+    }
+  });
+})();
+</script>
+{{template "foot" .}}
+{{end}}

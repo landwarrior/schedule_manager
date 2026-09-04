@@ -16,6 +16,8 @@
 1. **実行ファイル（exe）を使う** … Python 不要。下の「配布物の入手」または自分でビルド
 2. **ソースから起動する** … 開発・改造向け
 
+> Go 実装（同等機能）は `powered_by_golang/` にあります。起動方法は同ディレクトリの `README.md` を参照してください。SQLite（`schedule.db`）のスキーマは Python 版と互換です。
+
 ### 配布物の入手（推奨）
 
 GitHub の **Releases** から `schedule_manager.exe` をダウンロードします。

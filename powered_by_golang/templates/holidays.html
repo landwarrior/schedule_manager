@@ -1,0 +1,69 @@
+{{define "holidays.html"}}
+{{template "head" .}}
+<section class="master-page">
+<section class="toolbar">
+  <h1>祝日・休業日マスタ</h1>
+</section>
+
+<p class="field-help">祝日や会社の休業日を登録します。日付だけ登録し、名称は後から一覧で編集できます。</p>
+
+<section class="stack-form master-add-panel holiday-create-form">
+  <h2>祝日・休業日を追加</h2>
+  <form method="post" class="inline-form">
+    <label>
+      日付
+      <input type="text" name="date" data-datepicker="date" placeholder="YYYY-MM-DD" required>
+    </label>
+    <label>
+      名称（任意）
+      <input type="text" name="name" placeholder="後から入力できます" autocomplete="off">
+    </label>
+    <button type="submit">追加</button>
+  </form>
+</section>
+
+<div class="master-table-wrap">
+<table class="data-table master-table holiday-master-table">
+  <thead>
+    <tr>
+      <th class="col-date">日付</th>
+      <th>名称</th>
+      <th class="col-actions">操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{if not .Holidays}}
+      <tr><td colspan="3" class="empty">祝日・休業日は未登録です</td></tr>
+    {{end}}
+    {{range .Holidays}}
+      <tr>
+        <td>{{.Date}}</td>
+        <td>
+          <label class="sr-only" for="holiday-name-{{.Date}}">名称</label>
+          <input type="text" id="holiday-name-{{.Date}}" name="name"
+                 value="{{.Name}}" placeholder="名称を入力"
+                 form="holiday-update-{{.Date}}" autocomplete="off">
+        </td>
+        <td class="actions">
+          <button type="submit" form="holiday-update-{{.Date}}">更新</button>
+          <button type="submit" form="holiday-delete-{{.Date}}" class="danger"
+                  onclick="return confirm('削除しますか？');">
+            削除
+          </button>
+        </td>
+      </tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
+
+{{range .Holidays}}
+  <form id="holiday-update-{{.Date}}" method="post"
+        action="/holidays/{{.Date}}/update" hidden></form>
+  <form id="holiday-delete-{{.Date}}" method="post"
+        action="/holidays/{{.Date}}/delete" hidden></form>
+{{end}}
+
+</section>
+{{template "foot" .}}
+{{end}}

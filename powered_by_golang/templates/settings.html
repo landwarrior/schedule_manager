@@ -1,0 +1,54 @@
+{{define "settings.html"}}
+{{template "head" .}}
+<section class="toolbar">
+  <h1>設定</h1>
+</section>
+
+<form method="post" class="stack-form">
+  <label>
+    契約名
+    <input type="text" name="contract_name" maxlength="200"
+           value="{{.Settings.ContractName}}"
+           placeholder="例: ○○株式会社 基幹システム開発">
+    <span class="field-help">スケジュール画面の上部に表示されます。schedule.db を切り替えたときに、どの契約のデータか判別するために使います。</span>
+  </label>
+  <label>
+    メンバー人数
+    <input type="number" name="member_count" min="1" step="1" required
+           value="{{.Settings.MemberCount}}">
+  </label>
+  <label>
+    計画稼働率（%）
+    <input type="number" name="planned_utilization" min="1" max="100" step="1" required
+           value="{{fmtPercent .Settings.PlannedUtilization}}">
+    <span class="field-help">割当が「キャパ × 計画稼働率」を超えると黄色、キャパに達すると赤色になります（既定 80%）</span>
+  </label>
+  <label>
+    デフォルト表示開始月
+    <input type="text" name="display_from" data-datepicker="month" placeholder="YYYY-MM" required
+           value="{{.Settings.DisplayFrom}}">
+  </label>
+  <label>
+    デフォルト表示終了月
+    <input type="text" name="display_to" data-datepicker="month" placeholder="YYYY-MM" required
+           value="{{.Settings.DisplayTo}}">
+  </label>
+  <fieldset>
+    <legend>カラーテーマ</legend>
+    <div class="theme-options">
+      {{range .ThemeChoices}}
+        <label>
+          <input type="radio" name="theme" value="{{.}}"
+                 {{if eq $.UITheme .}}checked{{end}} required>
+          {{index $.ThemeLabels .}}
+        </label>
+      {{end}}
+    </div>
+    <span class="field-help">ライト基準色 #e0e0e0 ／ ダーク基準色 #272727 ／ システムは OS の設定に追従</span>
+  </fieldset>
+  <div class="form-actions">
+    <button type="submit">保存</button>
+  </div>
+</form>
+{{template "foot" .}}
+{{end}}

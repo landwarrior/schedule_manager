@@ -1,0 +1,126 @@
+{{define "phases.html"}}
+{{template "head" .}}
+<section class="master-page">
+<section class="toolbar">
+  <h1>工程マスタ</h1>
+</section>
+
+<p class="field-help">工程名と背景色を管理します。入力方式（期間のみ／工数入力）は<a href="/projects">プロジェクト設定</a>で工程ごとに指定します。表示／非表示もプロジェクト設定で切り替えます。</p>
+
+<form method="post" id="phase-order-form" class="phase-order-form">
+  <input type="hidden" name="action" value="reorder">
+  <input type="hidden" name="phase_order" id="phase-order"
+         value="{{joinIDs (phaseDefIDs .Phases)}}">
+  <button type="submit">並び順を保存</button>
+</form>
+
+<div class="master-table-wrap">
+<table class="data-table master-table phase-master-table">
+  <thead>
+    <tr>
+      <th class="col-order">表示順</th>
+      <th>工程名</th>
+      <th class="col-color">背景色</th>
+      <th class="col-actions">操作</th>
+    </tr>
+  </thead>
+  <tbody id="phase-master-list">
+    {{range $phase := .Phases}}
+      <tr data-phase-id="{{$phase.ID}}">
+        <td>
+          <span class="phase-order-actions">
+            <button type="button" class="secondary phase-move-up" aria-label="上へ">↑</button>
+            <button type="button" class="secondary phase-move-down" aria-label="下へ">↓</button>
+          </span>
+        </td>
+        <td>
+          <input type="text" name="name" required value="{{$phase.Name}}"
+                 form="phase-update-{{$phase.ID}}" autocomplete="off">
+        </td>
+        <td>
+          <div class="phase-color-cell">
+            <select name="color" form="phase-update-{{$phase.ID}}">
+              {{range $color := $.PhaseColors}}
+                <option value="{{$color}}" {{if eq $phase.Color $color}}selected{{end}}>
+                  {{index $.PhaseColorLabels $color}}
+                </option>
+              {{end}}
+            </select>
+            <span class="color-sample color-{{$phase.Color}}" aria-hidden="true"></span>
+          </div>
+        </td>
+        <td class="actions">
+          <button type="submit" form="phase-update-{{$phase.ID}}">更新</button>
+          <button type="submit" form="phase-delete-{{$phase.ID}}" class="danger"
+                  onclick="return confirm('この工程を削除しますか？関連する工数・期間も削除されます。');">
+            削除
+          </button>
+        </td>
+      </tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
+
+{{range .Phases}}
+  <form id="phase-update-{{.ID}}" method="post" hidden>
+    <input type="hidden" name="action" value="update">
+    <input type="hidden" name="phase_id" value="{{.ID}}">
+  </form>
+  <form id="phase-delete-{{.ID}}" method="post"
+        action="/phases/{{.ID}}/delete" hidden></form>
+{{end}}
+
+<section class="stack-form master-add-panel phase-create-form">
+  <h2>工程を追加</h2>
+  <form method="post" class="inline-form">
+    <input type="hidden" name="action" value="create">
+    <label>
+      工程名
+      <input type="text" name="name" required placeholder="例: 受入試験" autocomplete="off">
+    </label>
+    <label>
+      背景色
+      <select name="color">
+        {{range $color := .PhaseColors}}
+          <option value="{{$color}}">{{index $.PhaseColorLabels $color}}</option>
+        {{end}}
+      </select>
+    </label>
+    <button type="submit">追加</button>
+  </form>
+</section>
+</section>
+<script>
+(() => {
+  const list = document.getElementById("phase-master-list");
+  const orderInput = document.getElementById("phase-order");
+  if (!list || !orderInput) return;
+
+  function syncOrder() {
+    const ids = [...list.querySelectorAll("tr[data-phase-id]")].map(
+      (row) => row.dataset.phaseId
+    );
+    orderInput.value = ids.join(",");
+  }
+
+  list.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    const row = button.closest("tr[data-phase-id]");
+    if (!row) return;
+    if (button.classList.contains("phase-move-up")) {
+      const prev = row.previousElementSibling;
+      if (prev) list.insertBefore(row, prev);
+      syncOrder();
+    }
+    if (button.classList.contains("phase-move-down")) {
+      const next = row.nextElementSibling;
+      if (next) list.insertBefore(next, row);
+      syncOrder();
+    }
+  });
+})();
+</script>
+{{template "foot" .}}
+{{end}}

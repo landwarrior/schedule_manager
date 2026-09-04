@@ -1,0 +1,142 @@
+{{define "schedule.html"}}
+{{template "head" .}}
+{{if .ContractName}}
+<section class="contract-header">
+  <h1>{{.ContractName}}</h1>
+</section>
+{{end}}
+<section class="toolbar schedule-toolbar">
+  <form class="inline-form schedule-range-form" method="get" action="/">
+    <div class="range-control">
+      <span class="range-label">表示期間</span>
+      <div class="range-fields">
+        <input type="text" name="from" value="{{.DisplayFrom}}" data-datepicker="month" placeholder="YYYY-MM" required aria-label="表示開始月">
+        <span class="range-sep">〜</span>
+        <input type="text" name="to" value="{{.DisplayTo}}" data-datepicker="month" placeholder="YYYY-MM" required aria-label="表示終了月">
+      </div>
+    </div>
+    <button type="submit">表示</button>
+  </form>
+  <div class="schedule-toolbar-notes muted">
+    <p>
+      メンバー人数: {{.MemberCount}}人 ／ キャパ = 営業日 × 人数 ／
+      計画稼働率: {{fmtPercent .PlannedUtilization}}%
+      （割当がキャパ×計画稼働率を超えると黄、キャパ到達で赤）
+      ／ 差分 = 見積工数 − 割当済（プラスは割当不足、マイナスは見積が甘い）
+      ／ 工数セルは矢印キーで移動
+    </p>
+  </div>
+</section>
+
+<div class="table-scroll">
+  <table class="schedule-table">
+    <colgroup>
+      <col class="col-project">
+      <col class="col-phase">
+      <col class="col-meta1">
+      <col class="col-meta2">
+      <col class="col-meta3">
+      {{range .Months}}{{range decades}}<col>{{end}}{{end}}
+    </colgroup>
+    <thead>
+      <tr>
+        <th class="sticky-col col-project">プロジェクト</th>
+        <th class="sticky-col col-phase">工程</th>
+        <th class="sticky-col col-meta1">見積工数</th>
+        <th class="sticky-col col-meta2">割当済</th>
+        <th class="sticky-col col-meta3">差分</th>
+        {{range .Months}}
+          <th colspan="3" class="month-head" data-ym="{{.}}">{{ymSlash .}}</th>
+        {{end}}
+      </tr>
+      <tr>
+        <th class="sticky-col col-project"></th>
+        <th class="sticky-col col-phase"></th>
+        <th class="sticky-col col-meta1"></th>
+        <th class="sticky-col col-meta2"></th>
+        <th class="sticky-col col-meta3"></th>
+        {{range $ym := .Months}}
+          {{range $d := decades}}
+            <th class="decade-head" data-ym="{{$ym}}" data-decade="{{$d}}">{{index $.DecadeLabels $d}}</th>
+          {{end}}
+        {{end}}
+      </tr>
+    </thead>
+    <tbody>
+      {{if not .Projects}}
+        <tr>
+          <td colspan="{{add 5 (mul (len .Months) 3)}}" class="empty">
+            プロジェクトがありません。<a href="/projects/new">作成する</a>
+          </td>
+        </tr>
+      {{end}}
+    </tbody>
+
+    {{range $project := .Projects}}
+    <tbody class="project-block">
+      {{range $i, $phase := $project.Phases}}
+        <tr>
+          {{if eq $i 0}}
+            <th class="sticky-col col-project" rowspan="{{$project.PhaseCount}}">
+              <div class="project-name">
+                <a href="/projects/{{$project.ID}}/edit">{{$project.Name}}</a>
+              </div>
+            </th>
+          {{end}}
+          <td class="sticky-col col-phase">{{$phase.Name}}</td>
+          {{if eq $phase.InputMode "effort"}}
+            <td class="sticky-col col-meta1 num" data-phase-total="{{$project.ID}}-{{$phase.ID}}">{{fmtEffort $phase.Total}}</td>
+            <td class="sticky-col col-meta2 num" data-phase-allocated="{{$project.ID}}-{{$phase.ID}}">{{fmtEffort $phase.Allocated}}</td>
+            <td class="sticky-col col-meta3 num {{if gt $phase.Diff 0.0}}warn{{else if lt $phase.Diff 0.0}}diff-over{{end}}" data-phase-diff="{{$project.ID}}-{{$phase.ID}}">{{fmtEffort $phase.Diff}}</td>
+            {{range $cell := $phase.Cells}}
+              <td class="phase-cell color-{{$phase.Color}} {{if $cell.Active}}active{{end}}">
+                <input
+                  class="effort-input"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value="{{if gt $cell.Effort 0.0}}{{fmtEffort $cell.Effort}}{{end}}"
+                  data-project-id="{{$project.ID}}"
+                  data-phase-id="{{$phase.ID}}"
+                  data-ym="{{$cell.YM}}"
+                  data-decade="{{$cell.Decade}}"
+                >
+              </td>
+            {{end}}
+          {{else}}
+            <td class="sticky-col col-meta1" colspan="3">期間のみ</td>
+            {{range $cell := $phase.Cells}}
+              <td class="phase-cell color-{{$phase.Color}} {{if $cell.Active}}active{{end}}">
+                {{if $cell.Active}}●{{end}}
+              </td>
+            {{end}}
+          {{end}}
+        </tr>
+      {{end}}
+    </tbody>
+    {{end}}
+    <tfoot>
+      <tr>
+        <th class="sticky-col col-project summary-label" colspan="5">営業日</th>
+        {{range .Summary}}
+          <td class="num" data-biz="{{.YM}}-{{.Decade}}">{{.BusinessDays}}</td>
+        {{end}}
+      </tr>
+      <tr>
+        <th class="sticky-col col-project summary-label" colspan="5">キャパ（人日）</th>
+        {{range .Summary}}
+          <td class="num" data-cap="{{.YM}}-{{.Decade}}">{{fmtEffort .Capacity}}</td>
+        {{end}}
+      </tr>
+      <tr>
+        <th class="sticky-col col-project summary-label" colspan="5">割当合計（人日）</th>
+        {{range .Summary}}
+          <td class="num {{if eq .Status "over"}}cap-over{{else if eq .Status "warn"}}cap-warn{{end}}" data-sum="{{.YM}}-{{.Decade}}">{{fmtEffort .Allocated}}</td>
+        {{end}}
+      </tr>
+    </tfoot>
+  </table>
+</div>
+<script src="/static/schedule.js"></script>
+{{template "foot" .}}
+{{end}}

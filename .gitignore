@@ -6,3 +6,7 @@ schedule.db
 build/
 dist/
 *.egg-info/
+powered_by_golang/schedule_manager.exe
+powered_by_golang/dist/
+powered_by_golang/rsrc_windows_*.syso
+

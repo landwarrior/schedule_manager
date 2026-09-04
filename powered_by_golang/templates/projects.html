@@ -1,0 +1,110 @@
+{{define "projects.html"}}
+{{template "head" .}}
+<section class="toolbar">
+  <h1>プロジェクト</h1>
+</section>
+
+<p class="field-help">
+  工数入力の工程は <strong>割当済 / 見積工数</strong>（人日・0.1 刻み）で表示します。
+  左がスケジュール上の割当合計、右が見積工数です。
+  期間のみの工程は期間、非表示の工程は「非表示」と表示します。
+</p>
+
+{{if .Projects}}
+<form method="post" id="project-order-form" class="phase-order-form">
+  <input type="hidden" name="action" value="reorder">
+  <input type="hidden" name="project_order" id="project-order"
+         value="{{joinIDs (projectIDs .Projects)}}">
+  <button type="submit">並び順を保存</button>
+</form>
+{{end}}
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th class="col-order">表示順</th>
+      <th>名前</th>
+      {{range .PhaseDefinitions}}
+        <th>{{.Name}}</th>
+      {{end}}
+      <th></th>
+    </tr>
+  </thead>
+  <tbody id="project-list">
+    {{if not .Projects}}
+      <tr><td colspan="{{add 3 (len .PhaseDefinitions)}}" class="empty">プロジェクトがありません</td></tr>
+    {{end}}
+    {{range $project := .Projects}}
+      <tr data-project-id="{{$project.ID}}">
+        <td class="col-order">
+          <span class="phase-order-actions">
+            <button type="button" class="secondary phase-move-up" aria-label="上へ">↑</button>
+            <button type="button" class="secondary phase-move-down" aria-label="下へ">↓</button>
+          </span>
+        </td>
+        <td><a href="/projects/{{$project.ID}}/edit">{{$project.Name}}</a></td>
+        {{range $phaseDef := $.PhaseDefinitions}}
+          {{$phase := findPhase $project $phaseDef.ID}}
+          <td>
+            {{if not $phase}}
+              —
+            {{else if not $phase.Enabled}}
+              <span class="field-help">非表示</span>
+            {{else if eq $phase.InputMode "effort"}}
+              {{$alloc := allocGet $.Allocated $project.ID $phase.PhaseID}}
+              <span class="num">{{fmtEffort $alloc}} / {{fmtEffort $phase.TotalEffort}}</span>
+            {{else if and $phase.StartYM $phase.EndYM}}
+              {{ymSlash (derefStr $phase.StartYM)}} {{decadeLabel (derefInt $phase.StartDecade)}}
+              〜
+              {{ymSlash (derefStr $phase.EndYM)}} {{decadeLabel (derefInt $phase.EndDecade)}}
+            {{else}}
+              —
+            {{end}}
+          </td>
+        {{end}}
+        <td class="actions">
+          <form method="post" action="/projects/{{$project.ID}}/delete" onsubmit="return confirm('削除しますか？');">
+            <button type="submit" class="danger">削除</button>
+          </form>
+        </td>
+      </tr>
+    {{end}}
+  </tbody>
+</table>
+
+<div class="form-actions list-page-actions">
+  <a class="button" href="/projects/new">新規作成</a>
+</div>
+<script>
+(() => {
+  const list = document.getElementById("project-list");
+  const orderInput = document.getElementById("project-order");
+  if (!list || !orderInput) return;
+
+  function syncOrder() {
+    const ids = [...list.querySelectorAll("tr[data-project-id]")].map(
+      (row) => row.dataset.projectId
+    );
+    orderInput.value = ids.join(",");
+  }
+
+  list.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    const row = button.closest("tr[data-project-id]");
+    if (!row) return;
+    if (button.classList.contains("phase-move-up")) {
+      const prev = row.previousElementSibling;
+      if (prev?.dataset.projectId) list.insertBefore(row, prev);
+      syncOrder();
+    }
+    if (button.classList.contains("phase-move-down")) {
+      const next = row.nextElementSibling;
+      if (next?.dataset.projectId) list.insertBefore(next, row);
+      syncOrder();
+    }
+  });
+})();
+</script>
+{{template "foot" .}}
+{{end}}
