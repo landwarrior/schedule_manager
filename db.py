@@ -1,4 +1,4 @@
-"""SQLite connection and schema initialization."""
+"""SQLite 接続とスキーマ初期化."""
 
 from __future__ import annotations
 
@@ -70,6 +70,11 @@ CREATE TABLE IF NOT EXISTS allocations (
 
 
 def get_connection() -> sqlite3.Connection:
+    """schedule.db への接続を開き、Row ファクトリと外部キー制約を有効化して返す.
+
+    Returns:
+        sqlite3.Connection: Row ファクトリ有効・外部キー制約 ON の接続。
+    """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -77,6 +82,15 @@ def get_connection() -> sqlite3.Connection:
 
 
 def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    """指定名のテーブルが存在すれば True を返す.
+
+    Args:
+        conn (sqlite3.Connection): SQLite 接続。
+        name (str): 確認するテーブル名。
+
+    Returns:
+        bool: 存在すれば True。
+    """
     row = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
         (name,),
@@ -85,10 +99,25 @@ def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
 
 
 def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    """テーブルに指定名のカラムが存在すれば True を返す.
+
+    Args:
+        conn (sqlite3.Connection): SQLite 接続。
+        table (str): テーブル名。
+        column (str): 確認するカラム名。
+
+    Returns:
+        bool: 存在すれば True。
+    """
     return column in {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
 
 
 def _ensure_project_phases_columns(conn: sqlite3.Connection) -> None:
+    """project_phases に不足カラムを追加し、input_mode を補完する.
+
+    Args:
+        conn (sqlite3.Connection): SQLite 接続。
+    """
     if not _table_exists(conn, "project_phases"):
         return
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(project_phases)").fetchall()}
@@ -134,23 +163,29 @@ def _ensure_project_phases_columns(conn: sqlite3.Connection) -> None:
 
 
 def _ensure_settings_columns(conn: sqlite3.Connection) -> None:
+    """settings に不足カラムを追加・改名する（旧バージョンからの移行用）.
+
+    Args:
+        conn (sqlite3.Connection): SQLite 接続。
+    """
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(settings)").fetchall()}
     if "contract_name" not in columns:
         conn.execute("ALTER TABLE settings ADD COLUMN contract_name TEXT NOT NULL DEFAULT ''")
     if "planned_utilization" not in columns:
         if "safety_rate" in columns:
-            conn.execute(
-                "ALTER TABLE settings RENAME COLUMN safety_rate TO planned_utilization"
-            )
+            conn.execute("ALTER TABLE settings RENAME COLUMN safety_rate TO planned_utilization")
         else:
-            conn.execute(
-                "ALTER TABLE settings ADD COLUMN planned_utilization REAL NOT NULL DEFAULT 80"
-            )
+            conn.execute("ALTER TABLE settings ADD COLUMN planned_utilization REAL NOT NULL DEFAULT 80")
     if "theme" not in columns:
         conn.execute("ALTER TABLE settings ADD COLUMN theme TEXT NOT NULL DEFAULT 'system'")
 
 
 def _seed_phase_definitions(conn: sqlite3.Connection) -> None:
+    """工程マスタが空なら初期工程を投入する.
+
+    Args:
+        conn (sqlite3.Connection): SQLite 接続。
+    """
     count = conn.execute("SELECT COUNT(*) AS c FROM phase_definitions").fetchone()["c"]
     if count:
         return
@@ -162,11 +197,25 @@ def _seed_phase_definitions(conn: sqlite3.Connection) -> None:
 
 
 def _legacy_phase_map(conn: sqlite3.Connection) -> dict[str, int]:
+    """旧キー（legacy_key）から phase_definitions の id への対応表を作る.
+
+    Args:
+        conn (sqlite3.Connection): SQLite 接続。
+
+    Returns:
+        dict[str, int]: legacy_key をキー、phase_definitions.id を値とする dict。
+    """
     rows = conn.execute("SELECT id, legacy_key FROM phase_definitions WHERE legacy_key IS NOT NULL").fetchall()
     return {row["legacy_key"]: row["id"] for row in rows}
 
 
 def _migrate_project_data(conn: sqlite3.Connection, legacy_map: dict[str, int]) -> None:
+    """旧 phase_totals / test_t_period のデータを project_phases に移す.
+
+    Args:
+        conn (sqlite3.Connection): SQLite 接続。
+        legacy_map (dict[str, int]): legacy_key から phase_definitions.id への対応表。
+    """
     projects = conn.execute("SELECT id FROM projects").fetchall()
     for project in projects:
         project_id = project["id"]
@@ -234,6 +283,11 @@ def _migrate_project_data(conn: sqlite3.Connection, legacy_map: dict[str, int]) 
 
 
 def _migrate_legacy_schema(conn: sqlite3.Connection) -> None:
+    """旧スキーマ（phase 文字列ベース）を phase_id ベースに移行する.
+
+    Args:
+        conn (sqlite3.Connection): SQLite 接続。
+    """
     if not _table_exists(conn, "phase_definitions"):
         return
 
@@ -280,6 +334,10 @@ def _migrate_legacy_schema(conn: sqlite3.Connection) -> None:
 
 
 def init_db() -> None:
+    """スキーマ作成・マイグレーションを適用し、settings の初期行を保証する.
+
+    起動時に 1 回だけ呼び出す想定。
+    """
     with get_connection() as conn:
         conn.executescript(SCHEMA)
         _ensure_settings_columns(conn)

@@ -1,4 +1,4 @@
-"""Data access helpers for the schedule manager."""
+"""スケジュール管理の DB アクセス層."""
 
 from __future__ import annotations
 
@@ -15,6 +15,17 @@ from db import get_connection
 
 
 def _require_lastrowid(cur: sqlite3.Cursor) -> int:
+    """INSERT 後の cursor.lastrowid を返す.
+
+    Args:
+        cur (sqlite3.Cursor): INSERT 実行後のカーソル。
+
+    Returns:
+        int: 挿入された行の id。
+
+    Raises:
+        RuntimeError: lastrowid を取得できなかった場合。
+    """
     lastrowid = cur.lastrowid
     if lastrowid is None:
         raise RuntimeError("INSERT did not return a row id")
@@ -22,12 +33,25 @@ def _require_lastrowid(cur: sqlite3.Cursor) -> int:
 
 
 def _optional_int(value: Any) -> int | None:
+    """値を int に変換する（None は None のまま返す）.
+
+    Args:
+        value (Any): 変換対象の値。
+
+    Returns:
+        int | None: int 変換結果。入力が None なら None。
+    """
     if value is None:
         return None
     return int(value)
 
 
 def get_settings() -> sqlite3.Row:
+    """設定行（id=1 の 1 行）を返す.
+
+    Returns:
+        sqlite3.Row: settings テーブルの 1 行。
+    """
     with get_connection() as conn:
         return conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
 
@@ -40,6 +64,16 @@ def update_settings(
     planned_utilization: float,
     theme: str,
 ) -> None:
+    """契約名・人数・表示期間・計画稼働率・テーマをまとめて更新する.
+
+    Args:
+        contract_name (str): 契約名。
+        member_count (int): メンバー人数。
+        display_from (str): 表示開始年月（YYYY-MM）。
+        display_to (str): 表示終了年月（YYYY-MM）。
+        planned_utilization (float): 計画稼働率（パーセント）。
+        theme (str): UI テーマ（light / dark / system）。
+    """
     with get_connection() as conn:
         conn.execute(
             "UPDATE settings SET contract_name = ?, member_count = ?, display_from = ?, "
@@ -50,21 +84,42 @@ def update_settings(
 
 
 def update_theme(theme: str) -> None:
+    """UI テーマ設定だけを保存する.
+
+    Args:
+        theme (str): UI テーマ（light / dark / system）。
+    """
     with get_connection() as conn:
         conn.execute("UPDATE settings SET theme = ? WHERE id = 1", (theme,))
         conn.commit()
 
 
 def list_holidays() -> list[sqlite3.Row]:
+    """祝日を日付順で返す.
+
+    Returns:
+        list[sqlite3.Row]: 祝日行のリスト（date / name カラム）。
+    """
     with get_connection() as conn:
         return list(conn.execute("SELECT date, name FROM holidays ORDER BY date").fetchall())
 
 
 def list_holiday_dates() -> list[str]:
+    """祝日の日付文字列（YYYY-MM-DD）だけのリストを返す.
+
+    Returns:
+        list[str]: 日付文字列のリスト。
+    """
     return [row["date"] for row in list_holidays()]
 
 
 def add_holiday(date_str: str, name: str) -> None:
+    """日付をキーに祝日を登録・置き換える.
+
+    Args:
+        date_str (str): 祝日の日付（YYYY-MM-DD）。
+        name (str): 祝日名。
+    """
     with get_connection() as conn:
         conn.execute(
             "INSERT OR REPLACE INTO holidays (date, name) VALUES (?, ?)",
@@ -74,6 +129,15 @@ def add_holiday(date_str: str, name: str) -> None:
 
 
 def update_holiday(date_str: str, name: str) -> None:
+    """祝日の名称を更新する.
+
+    Args:
+        date_str (str): 祝日の日付（YYYY-MM-DD）。
+        name (str): 新しい祝日名。
+
+    Raises:
+        ValueError: 該当する日付が登録されていない場合。
+    """
     with get_connection() as conn:
         row = conn.execute("SELECT date FROM holidays WHERE date = ?", (date_str,)).fetchone()
         if row is None:
@@ -86,12 +150,23 @@ def update_holiday(date_str: str, name: str) -> None:
 
 
 def delete_holiday(date_str: str) -> None:
+    """日付指定で祝日を削除する.
+
+    Args:
+        date_str (str): 削除する祝日の日付（YYYY-MM-DD）。
+    """
     with get_connection() as conn:
         conn.execute("DELETE FROM holidays WHERE date = ?", (date_str,))
         conn.commit()
 
 
 def list_phase_definitions() -> list[dict[str, Any]]:
+    """工程マスタを表示順で返す.
+
+    Returns:
+        list[dict[str, Any]]: 工程マスタの dict リスト（id / name / color /
+            sort_order / legacy_key）。
+    """
     with get_connection() as conn:
         rows = conn.execute(
             "SELECT id, name, input_mode, color, sort_order, legacy_key FROM phase_definitions ORDER BY sort_order, id"
@@ -100,6 +175,14 @@ def list_phase_definitions() -> list[dict[str, Any]]:
 
 
 def get_phase_definition(phase_id: int) -> dict[str, Any] | None:
+    """工程マスタを 1 件返す.
+
+    Args:
+        phase_id (int): 工程マスタの id。
+
+    Returns:
+        dict[str, Any] | None: 工程マスタの dict。存在しなければ None。
+    """
     with get_connection() as conn:
         row = conn.execute(
             "SELECT id, name, input_mode, color, sort_order, legacy_key FROM phase_definitions WHERE id = ?",
@@ -109,6 +192,18 @@ def get_phase_definition(phase_id: int) -> dict[str, Any] | None:
 
 
 def create_phase_definition(name: str, color: str) -> int:
+    """工程マスタを新規作成し、全プロジェクトに無効状態で紐付ける.
+
+    Args:
+        name (str): 工程名。
+        color (str): 表示色（cyan / orange / green / lavender）。
+
+    Returns:
+        int: 作成した工程マスタの id。
+
+    Raises:
+        ValueError: 工程名が空の場合。
+    """
     name = name.strip()
     if not name:
         raise ValueError("工程名は必須です")
@@ -130,6 +225,16 @@ def update_phase_definition(
     name: str,
     color: str,
 ) -> None:
+    """工程マスタの名称・色を更新する.
+
+    Args:
+        phase_id (int): 工程マスタの id。
+        name (str): 新しい工程名。
+        color (str): 新しい表示色。
+
+    Raises:
+        ValueError: 工程名が空、または該当 id が存在しない場合。
+    """
     name = name.strip()
     if not name:
         raise ValueError("工程名は必須です")
@@ -146,6 +251,14 @@ def update_phase_definition(
 
 
 def reorder_phase_definitions(ordered_ids: list[int]) -> None:
+    """指定した id 順に工程マスタの表示順を更新する.
+
+    Args:
+        ordered_ids (list[int]): 全工程マスタの id を並べ替えたリスト。
+
+    Raises:
+        ValueError: id 一覧が既存の工程マスタと一致しない場合。
+    """
     if not ordered_ids:
         raise ValueError("並び順が不正です")
     with get_connection() as conn:
@@ -161,6 +274,14 @@ def reorder_phase_definitions(ordered_ids: list[int]) -> None:
 
 
 def reorder_projects(ordered_ids: list[int]) -> None:
+    """指定した id 順にプロジェクトの表示順を更新する.
+
+    Args:
+        ordered_ids (list[int]): 全プロジェクトの id を並べ替えたリスト。
+
+    Raises:
+        ValueError: id 一覧が既存のプロジェクトと一致しない場合。
+    """
     if not ordered_ids:
         raise ValueError("並び順が不正です")
     with get_connection() as conn:
@@ -176,6 +297,14 @@ def reorder_projects(ordered_ids: list[int]) -> None:
 
 
 def delete_phase_definition(phase_id: int) -> None:
+    """工程マスタを削除する（最後の 1 件は削除しない）.
+
+    Args:
+        phase_id (int): 削除する工程マスタの id。
+
+    Raises:
+        ValueError: 工程マスタが残り 1 件しかない場合。
+    """
     with get_connection() as conn:
         count = conn.execute("SELECT COUNT(*) AS c FROM phase_definitions").fetchone()["c"]
         if count <= 1:
@@ -185,6 +314,13 @@ def delete_phase_definition(phase_id: int) -> None:
 
 
 def _attach_phase_to_all_projects(conn: sqlite3.Connection, phase_id: int, sort_order: int) -> None:
+    """全プロジェクトに、無効かつ工数入力モードの工程行を追加する.
+
+    Args:
+        conn (sqlite3.Connection): SQLite 接続。
+        phase_id (int): 追加する工程マスタの id。
+        sort_order (int): project_phases に設定する表示順。
+    """
     projects = conn.execute("SELECT id FROM projects").fetchall()
     for project in projects:
         conn.execute(
@@ -196,6 +332,14 @@ def _attach_phase_to_all_projects(conn: sqlite3.Connection, phase_id: int, sort_
 
 
 def _default_input_mode(legacy_key: str | None) -> str:
+    """新規プロジェクト工程の初期入力方式を legacy_key から決める.
+
+    Args:
+        legacy_key (str | None): 工程マスタの legacy_key。
+
+    Returns:
+        str: ``"integration"`` なら ``"period"``、それ以外は ``"effort"``。
+    """
     if legacy_key == "integration":
         return "period"
     return "effort"
@@ -207,6 +351,16 @@ def _clear_project_phase_mode_data(
     phase_id: int,
     input_mode: str,
 ) -> None:
+    """入力方式変更時に、使わなくなった工数・期間データを消す.
+
+    period に変える場合は割当・総工数を削除し、effort に変える場合は期間を消す。
+
+    Args:
+        conn (sqlite3.Connection): SQLite 接続。
+        project_id (int): 対象プロジェクト id。
+        phase_id (int): 対象工程 id。
+        input_mode (str): 新しい入力方式（period / effort）。
+    """
     if input_mode == "period":
         conn.execute(
             "UPDATE project_phases SET total_effort = 0 WHERE project_id = ? AND phase_id = ?",
@@ -226,6 +380,14 @@ def _clear_project_phase_mode_data(
 
 
 def _phase_row(row: sqlite3.Row) -> dict[str, Any]:
+    """phase_definitions の行を表示用 dict に変換する.
+
+    Args:
+        row (sqlite3.Row): phase_definitions の 1 行。
+
+    Returns:
+        dict[str, Any]: id / name / color / sort_order / legacy_key を持つ dict。
+    """
     return {
         "id": row["id"],
         "name": row["name"],
@@ -236,6 +398,15 @@ def _phase_row(row: sqlite3.Row) -> dict[str, Any]:
 
 
 def _load_project_phases(conn: sqlite3.Connection, project_id: int) -> list[dict[str, Any]]:
+    """指定プロジェクトの工程設定をマスタと結合して読み込む.
+
+    Args:
+        conn (sqlite3.Connection): SQLite 接続。
+        project_id (int): プロジェクト id。
+
+    Returns:
+        list[dict[str, Any]]: 工程設定の dict リスト（表示順）。
+    """
     rows = conn.execute(
         """
         SELECT
@@ -279,6 +450,11 @@ def _load_project_phases(conn: sqlite3.Connection, project_id: int) -> list[dict
 
 
 def list_projects() -> list[dict[str, Any]]:
+    """全プロジェクトを工程設定つきで返す.
+
+    Returns:
+        list[dict[str, Any]]: プロジェクト dict（id / name / sort_order / phases）のリスト。
+    """
     with get_connection() as conn:
         projects = conn.execute("SELECT id, name, sort_order FROM projects ORDER BY sort_order, id").fetchall()
         return [
@@ -293,6 +469,14 @@ def list_projects() -> list[dict[str, Any]]:
 
 
 def get_project(project_id: int) -> dict[str, Any] | None:
+    """プロジェクト 1 件を工程設定つきで返す.
+
+    Args:
+        project_id (int): プロジェクト id。
+
+    Returns:
+        dict[str, Any] | None: プロジェクト dict。存在しなければ None。
+    """
     with get_connection() as conn:
         project = conn.execute(
             "SELECT id, name, sort_order FROM projects WHERE id = ?",
@@ -309,6 +493,12 @@ def get_project(project_id: int) -> dict[str, Any] | None:
 
 
 def _init_project_phases(conn: sqlite3.Connection, project_id: int) -> None:
+    """新規プロジェクトに初期工程行を挿入する.
+
+    Args:
+        conn (sqlite3.Connection): SQLite 接続。
+        project_id (int): 新規作成したプロジェクト id。
+    """
     phase_defs = conn.execute(
         "SELECT id, sort_order, legacy_key FROM phase_definitions ORDER BY sort_order, id"
     ).fetchall()
@@ -323,6 +513,16 @@ def _init_project_phases(conn: sqlite3.Connection, project_id: int) -> None:
 
 
 def create_project(name: str, phase_configs: list[dict[str, Any]]) -> int:
+    """プロジェクトを作成し、初期工程と指定設定を適用する.
+
+    Args:
+        name (str): プロジェクト名。
+        phase_configs (list[dict[str, Any]]): 工程設定の dict リスト
+            （phase_id / enabled / input_mode など）。
+
+    Returns:
+        int: 作成したプロジェクトの id。
+    """
     with get_connection() as conn:
         max_order = conn.execute("SELECT COALESCE(MAX(sort_order), 0) AS m FROM projects").fetchone()["m"]
         cur = conn.execute(
@@ -337,6 +537,13 @@ def create_project(name: str, phase_configs: list[dict[str, Any]]) -> int:
 
 
 def update_project(project_id: int, name: str, phase_configs: list[dict[str, Any]]) -> None:
+    """プロジェクト名と工程設定を更新する.
+
+    Args:
+        project_id (int): プロジェクト id。
+        name (str): 新しいプロジェクト名。
+        phase_configs (list[dict[str, Any]]): 工程設定の dict リスト。
+    """
     with get_connection() as conn:
         conn.execute(
             "UPDATE projects SET name = ? WHERE id = ?",
@@ -347,6 +554,20 @@ def update_project(project_id: int, name: str, phase_configs: list[dict[str, Any
 
 
 def _save_project_phases(conn: sqlite3.Connection, project_id: int, phase_configs: list[dict[str, Any]]) -> None:
+    """プロジェクトの有効フラグ・入力方式・工数/期間を保存する.
+
+    入力方式が変更された工程は、使わなくなった側のデータを消去する。
+
+    Args:
+        conn (sqlite3.Connection): SQLite 接続。
+        project_id (int): プロジェクト id。
+        phase_configs (list[dict[str, Any]]): 工程設定の dict リスト
+            （phase_id / enabled / input_mode / total_effort / start_ym /
+            start_decade / end_ym / end_decade）。
+
+    Raises:
+        ValueError: 不明な工程 id が含まれる場合。
+    """
     known_ids = {row["id"] for row in conn.execute("SELECT id FROM phase_definitions").fetchall()}
     for index, config in enumerate(phase_configs):
         phase_id = int(config["phase_id"])
@@ -390,12 +611,29 @@ def _save_project_phases(conn: sqlite3.Connection, project_id: int, phase_config
 
 
 def delete_project(project_id: int) -> None:
+    """プロジェクトを削除する（割当・工程設定はカスケード削除）.
+
+    Args:
+        project_id (int): 削除するプロジェクト id。
+    """
     with get_connection() as conn:
         conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         conn.commit()
 
 
 def list_allocations(from_ym: str, to_ym: str) -> dict[tuple[int, int, str, int], float]:
+    """指定期間内の有効な工数割当をキー付き dict で返す.
+
+    有効かつ入力方式が effort の工程の割当のみを対象とする。
+
+    Args:
+        from_ym (str): 開始年月（YYYY-MM、含む）。
+        to_ym (str): 終了年月（YYYY-MM、含む）。
+
+    Returns:
+        dict[tuple[int, int, str, int], float]: (project_id, phase_id, year_month,
+            decade) をキー、工数を値とする dict。
+    """
     with get_connection() as conn:
         rows = conn.execute(
             """
@@ -414,6 +652,20 @@ def list_allocations(from_ym: str, to_ym: str) -> dict[tuple[int, int, str, int]
 
 
 def set_allocation(project_id: int, phase_id: int, year_month: str, decade: int, effort: float) -> None:
+    """工程×年月×旬のセルに工数を登録・更新・削除する.
+
+    effort が 0 の場合は行を削除し、それ以外は upsert する。
+
+    Args:
+        project_id (int): プロジェクト id。
+        phase_id (int): 工程マスタ id。
+        year_month (str): 年月（YYYY-MM）。
+        decade (int): 旬（1=上旬, 2=中旬, 3=下旬）。
+        effort (float): 工数（人日、0.1 刻み）。
+
+    Raises:
+        ValueError: 旬や工数が不正、または工程が無効・effort モードでない場合。
+    """
     if decade not in (1, 2, 3):
         raise ValueError("invalid decade")
     effort = round_effort(effort)
@@ -445,6 +697,14 @@ def set_allocation(project_id: int, phase_id: int, year_month: str, decade: int,
 
 
 def allocated_totals_by_project_phase() -> dict[tuple[int, int], float]:
+    """プロジェクト×工程ごとの割当工数合計を返す.
+
+    有効かつ入力方式が effort の工程のみを対象とする。
+
+    Returns:
+        dict[tuple[int, int], float]: (project_id, phase_id) をキー、割当工数の合計を
+            値とする dict。
+    """
     with get_connection() as conn:
         rows = conn.execute(
             """
@@ -462,6 +722,14 @@ def allocated_totals_by_project_phase() -> dict[tuple[int, int], float]:
 
 
 def phase_input_mode_label(mode: str) -> str:
+    """入力方式の日本語ラベルを返す.
+
+    Args:
+        mode (str): 入力方式（period / effort）。
+
+    Returns:
+        str: ``"期間のみ"`` または ``"工数入力"``。
+    """
     if mode == "period":
         return "期間のみ"
     return "工数入力"

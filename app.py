@@ -1,12 +1,16 @@
-"""Schedule manager web application."""
+"""スケジュール管理 Web アプリケーション."""
 
 from __future__ import annotations
 
 import argparse
 import threading
 import webbrowser
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
+from flask.typing import ResponseReturnValue
+from werkzeug.datastructures import MultiDict
 from werkzeug.serving import make_server
 
 from calendar_util import (
@@ -71,6 +75,17 @@ THEME_LABELS = {
 
 
 def _normalize_theme(raw: str | None) -> str:
+    """テーマ指定（light/dark/system）を検証・正規化する.
+
+    Args:
+        raw (str | None): フォームなどから受け取ったテーマ文字列。
+
+    Returns:
+        str: 正規化したテーマ名（light / dark / system）。
+
+    Raises:
+        ValueError: テーマ名が不正な場合。
+    """
     theme = (raw or "system").strip().lower()
     if theme not in THEME_CHOICES:
         raise ValueError("テーマの指定が不正です")
@@ -78,7 +93,13 @@ def _normalize_theme(raw: str | None) -> str:
 
 
 @app.context_processor
-def inject_theme():
+def inject_theme() -> dict[str, Any]:
+    """テーマと工程色ラベルを全テンプレートのコンテキストに注入する.
+
+    Returns:
+        dict[str, Any]: ui_theme / theme_choices / theme_labels /
+            phase_color_labels を含む dict。
+    """
     settings = get_settings()
     theme = settings["theme"] if settings and settings["theme"] else "system"
     if theme not in THEME_CHOICES:
@@ -92,6 +113,17 @@ def inject_theme():
 
 
 def _parse_effort(raw: str | None) -> float:
+    """フォームの工数文字列を 0.1 刻みの float に変換する（空は 0）.
+
+    Args:
+        raw (str | None): 工数の入力文字列。None や空文字は 0.0 とみなす。
+
+    Returns:
+        float: 0.1 刻みに丸めた工数（人日）。
+
+    Raises:
+        ValueError: 数値でない、または 0.1 刻みでない場合。
+    """
     if raw is None:
         return 0.0
     text = raw.strip()
@@ -104,6 +136,17 @@ def _parse_effort(raw: str | None) -> float:
 
 
 def _parse_decade(raw: str | None) -> int | None:
+    """フォームの旬指定を 1/2/3 に変換する（空は None）.
+
+    Args:
+        raw (str | None): 旬の入力文字列。
+
+    Returns:
+        int | None: 1 / 2 / 3 のいずれか。空なら None。
+
+    Raises:
+        ValueError: 1, 2, 3 以外が指定された場合。
+    """
     if raw is None:
         return None
     text = raw.strip()
@@ -116,6 +159,18 @@ def _parse_decade(raw: str | None) -> int | None:
 
 
 def _require_form_int(raw: str | None, message: str) -> int:
+    """必須の整数フォーム項目を変換する.
+
+    Args:
+        raw (str | None): フォームの入力文字列。
+        message (str): 変換失敗時に使うエラーメッセージ。
+
+    Returns:
+        int: 変換した整数値。
+
+    Raises:
+        ValueError: 未入力・空文字・整数でない場合。
+    """
     if raw is None:
         raise ValueError(message)
     text = raw.strip()
@@ -127,7 +182,19 @@ def _require_form_int(raw: str | None, message: str) -> int:
         raise ValueError(message) from exc
 
 
-def _parse_project_phases(form) -> list[dict]:
+def _parse_project_phases(form: MultiDict[str, str]) -> list[dict[str, Any]]:
+    """プロジェクト作成/編集フォームから工程設定リストを組み立てる.
+
+    Args:
+        form (MultiDict[str, str]): 送信されたフォーム（phase_order と
+            工程ごとの入力を含む）。
+
+    Returns:
+        list[dict[str, Any]]: models._save_project_phases に渡す工程設定 dict のリスト。
+
+    Raises:
+        ValueError: 並び順や工程指定が不正な場合。
+    """
     order_raw = (form.get("phase_order") or "").strip()
     if not order_raw:
         raise ValueError("工程の並び順が不正です")
@@ -135,7 +202,7 @@ def _parse_project_phases(form) -> list[dict]:
     if not phase_ids:
         raise ValueError("工程の並び順が不正です")
 
-    configs: list[dict] = []
+    configs: list[dict[str, Any]] = []
     enabled_count = 0
     for phase_id in phase_ids:
         phase = get_phase_definition(phase_id)
@@ -144,7 +211,7 @@ def _parse_project_phases(form) -> list[dict]:
         enabled = form.get(f"enabled_{phase_id}") == "1"
         if enabled:
             enabled_count += 1
-        config: dict = {"phase_id": phase_id, "enabled": enabled}
+        config: dict[str, Any] = {"phase_id": phase_id, "enabled": enabled}
         mode_raw = (form.get(f"input_mode_{phase_id}") or "effort").strip()
         if mode_raw not in ("period", "effort"):
             raise ValueError("入力方式が不正です")
@@ -164,8 +231,26 @@ def _parse_project_phases(form) -> list[dict]:
     return configs
 
 
-def _build_schedule_phase_rows(project: dict, columns, allocations, allocated_sums) -> list[dict]:
-    rows = []
+def _build_schedule_phase_rows(
+    project: dict[str, Any],
+    columns: Sequence[tuple[str, int]],
+    allocations: Mapping[tuple[int, int, str, int], float],
+    allocated_sums: Mapping[tuple[int, int], float],
+) -> list[dict[str, Any]]:
+    """プロジェクト 1 件分の有効工程からスケジュール表の行を組み立てる.
+
+    Args:
+        project (dict[str, Any]): 工程設定を含むプロジェクト dict。
+        columns (Sequence[tuple[str, int]]): 表示対象の (年月, 旬) の列一覧。
+        allocations (Mapping[tuple[int, int, str, int], float]): 割当工数の dict
+            （キーは (project_id, phase_id, 年月, 旬)）。
+        allocated_sums (Mapping[tuple[int, int], float]): プロジェクト×工程ごとの
+            割当工数合計。
+
+    Returns:
+        list[dict[str, Any]]: テンプレートに渡す工程行 dict のリスト。
+    """
+    rows: list[dict[str, Any]] = []
     for phase in project["phases"]:
         if not phase.get("enabled", True):
             continue
@@ -214,7 +299,13 @@ def _build_schedule_phase_rows(project: dict, columns, allocations, allocated_su
 
 
 @app.route("/")
-def schedule():
+def schedule() -> ResponseReturnValue:
+    """選択された表示期間のスケジュールマトリクス画面を表示する.
+
+    Returns:
+        ResponseReturnValue: schedule.html のレンダリング結果。
+            期間不正時はトップへのリダイレクト。
+    """
     settings = get_settings()
     try:
         display_from = normalize_ym(request.args.get("from") or settings["display_from"])
@@ -231,9 +322,7 @@ def schedule():
     columns = [(ym, decade) for ym in months for decade in (1, 2, 3)]
     holidays = list_holiday_dates()
     member_count = settings["member_count"]
-    planned_utilization = float(
-        settings["planned_utilization"] if settings["planned_utilization"] is not None else 80
-    )
+    planned_utilization = float(settings["planned_utilization"] if settings["planned_utilization"] is not None else 80)
 
     capacities = {
         (ym, decade): {
@@ -277,9 +366,7 @@ def schedule():
                 "capacity": cap["capacity"],
                 "allocated": allocated,
                 "status": status,
-                "warn_threshold": round_effort(
-                    cap["capacity"] * planned_utilization / 100.0
-                ),
+                "warn_threshold": round_effort(cap["capacity"] * planned_utilization / 100.0),
             }
         )
 
@@ -300,7 +387,13 @@ def schedule():
 
 
 @app.post("/api/allocations")
-def api_set_allocation():
+def api_set_allocation() -> ResponseReturnValue:
+    """割当セル 1 件を更新し、最新の合計・キャパシティを JSON で返す.
+
+    Returns:
+        ResponseReturnValue: ok / effort / period / phase を含む JSON。
+            入力不正時は HTTP 400 とエラーメッセージ。
+    """
     data = request.get_json(force=True, silent=True) or {}
     try:
         project_id = int(data["project_id"])
@@ -321,9 +414,7 @@ def api_set_allocation():
     )
     cap = capacity(year_month, decade, holidays, settings["member_count"])
     biz = business_days(year_month, decade, holidays)
-    planned_utilization = float(
-        settings["planned_utilization"] if settings["planned_utilization"] is not None else 80
-    )
+    planned_utilization = float(settings["planned_utilization"] if settings["planned_utilization"] is not None else 80)
     status = allocation_status(period_total, cap, planned_utilization)
     allocated_sums = allocated_totals_by_project_phase()
     project = get_project(project_id)
@@ -357,7 +448,13 @@ def api_set_allocation():
 
 
 @app.route("/projects", methods=["GET", "POST"])
-def projects_list():
+def projects_list() -> ResponseReturnValue:
+    """プロジェクト一覧を表示し、表示順の保存を処理する.
+
+    Returns:
+        ResponseReturnValue: projects.html のレンダリング結果。
+            POST 後は一覧へのリダイレクト。
+    """
     if request.method == "POST":
         action = (request.form.get("action") or "").strip()
         try:
@@ -385,7 +482,13 @@ def projects_list():
 
 
 @app.route("/projects/new", methods=["GET", "POST"])
-def projects_new():
+def projects_new() -> ResponseReturnValue:
+    """プロジェクトを新規作成する.
+
+    Returns:
+        ResponseReturnValue: GET 時は project_form.html、
+            POST 成功時は一覧へのリダイレクト。
+    """
     if request.method == "POST":
         try:
             name = (request.form.get("name") or "").strip()
@@ -427,7 +530,16 @@ def projects_new():
 
 
 @app.route("/projects/<int:project_id>/edit", methods=["GET", "POST"])
-def projects_edit(project_id: int):
+def projects_edit(project_id: int) -> ResponseReturnValue:
+    """既存プロジェクトの名称と工程設定を編集する.
+
+    Args:
+        project_id (int): 編集対象のプロジェクト id。
+
+    Returns:
+        ResponseReturnValue: GET 時は project_form.html、
+            POST 成功時・不明 id 時は一覧へのリダイレクト。
+    """
     project = get_project(project_id)
     if project is None:
         flash("プロジェクトが見つかりません", "error")
@@ -454,14 +566,28 @@ def projects_edit(project_id: int):
 
 
 @app.post("/projects/<int:project_id>/delete")
-def projects_delete(project_id: int):
+def projects_delete(project_id: int) -> ResponseReturnValue:
+    """プロジェクトを削除して一覧に戻る.
+
+    Args:
+        project_id (int): 削除対象のプロジェクト id。
+
+    Returns:
+        ResponseReturnValue: 一覧へのリダイレクト。
+    """
     delete_project(project_id)
     flash("プロジェクトを削除しました", "ok")
     return redirect(url_for("projects_list"))
 
 
 @app.route("/phases", methods=["GET", "POST"])
-def phases_page():
+def phases_page() -> ResponseReturnValue:
+    """工程マスタの管理（追加・更新・並び替え）を行う.
+
+    Returns:
+        ResponseReturnValue: phases.html のレンダリング結果。
+            POST 後は管理画面へのリダイレクト。
+    """
     if request.method == "POST":
         action = (request.form.get("action") or "").strip()
         try:
@@ -498,7 +624,15 @@ def phases_page():
 
 
 @app.post("/phases/<int:phase_id>/delete")
-def phases_delete(phase_id: int):
+def phases_delete(phase_id: int) -> ResponseReturnValue:
+    """工程マスタを削除して管理画面に戻る.
+
+    Args:
+        phase_id (int): 削除対象の工程マスタ id。
+
+    Returns:
+        ResponseReturnValue: 管理画面へのリダイレクト。
+    """
     try:
         delete_phase_definition(phase_id)
         flash("工程を削除しました", "ok")
@@ -508,7 +642,13 @@ def phases_delete(phase_id: int):
 
 
 @app.route("/holidays", methods=["GET", "POST"])
-def holidays():
+def holidays() -> ResponseReturnValue:
+    """祝日一覧を表示し、祝日の登録を処理する.
+
+    Returns:
+        ResponseReturnValue: holidays.html のレンダリング結果。
+            POST 成功時は一覧へのリダイレクト。
+    """
     if request.method == "POST":
         try:
             date_str = normalize_date(request.form.get("date"))
@@ -522,7 +662,15 @@ def holidays():
 
 
 @app.post("/holidays/<date_str>/update")
-def holidays_update(date_str: str):
+def holidays_update(date_str: str) -> ResponseReturnValue:
+    """祝日の名称を更新して一覧に戻る.
+
+    Args:
+        date_str (str): 更新対象の祝日の日付（YYYY-MM-DD）。
+
+    Returns:
+        ResponseReturnValue: 一覧へのリダイレクト。
+    """
     try:
         name = (request.form.get("name") or "").strip()
         update_holiday(date_str, name)
@@ -533,14 +681,28 @@ def holidays_update(date_str: str):
 
 
 @app.post("/holidays/<date_str>/delete")
-def holidays_delete(date_str: str):
+def holidays_delete(date_str: str) -> ResponseReturnValue:
+    """祝日を削除して一覧に戻る.
+
+    Args:
+        date_str (str): 削除対象の祝日の日付（YYYY-MM-DD）。
+
+    Returns:
+        ResponseReturnValue: 一覧へのリダイレクト。
+    """
     delete_holiday(date_str)
     flash("祝日を削除しました", "ok")
     return redirect(url_for("holidays"))
 
 
 @app.route("/settings", methods=["GET", "POST"])
-def settings_page():
+def settings_page() -> ResponseReturnValue:
+    """アプリ設定を表示・保存する.
+
+    Returns:
+        ResponseReturnValue: settings.html のレンダリング結果。
+            POST 成功時は設定画面へのリダイレクト。
+    """
     if request.method == "POST":
         try:
             member_count = int(request.form.get("member_count") or "1")
@@ -571,7 +733,12 @@ def settings_page():
 
 
 @app.post("/settings/theme")
-def settings_theme():
+def settings_theme() -> ResponseReturnValue:
+    """ヘッダーのテーマ切替を保存して元の画面に戻る.
+
+    Returns:
+        ResponseReturnValue: next パラメータで指定された画面へのリダイレクト。
+    """
     try:
         theme = _normalize_theme(request.form.get("theme"))
         update_theme(theme)
@@ -584,6 +751,14 @@ def settings_theme():
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """起動時の CLI 引数（ポート・ブラウザ起動）を解析する.
+
+    Args:
+        argv (list[str] | None): 解析する引数リスト。None なら sys.argv を使う。
+
+    Returns:
+        argparse.Namespace: 解析結果（port / browser / no_browser）。
+    """
     parser = argparse.ArgumentParser(description="スケジュール管理")
     parser.add_argument(
         "--port",
@@ -606,6 +781,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """ローカル Flask サーバーを起動し、必要に応じてブラウザを開く.
+
+    Args:
+        argv (list[str] | None): CLI 引数リスト。None なら sys.argv を使う。
+
+    Returns:
+        int: 終了コード。正常終了は 0、ポート指定が不正なら 2。
+    """
     args = _parse_args(argv)
     host = "127.0.0.1"
     port = 0 if args.port is None else args.port
