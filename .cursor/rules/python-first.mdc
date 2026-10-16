@@ -1,0 +1,13 @@
+---
+description: Python 版で実装・確認してから Go 版へ反映する
+alwaysApply: true
+---
+
+# Python 版を先に直す
+
+ユーザーは Python に慣れており、Go はほとんど使わない。機能修正と動作確認は Python 版を正とする。
+
+- 先に Python 版（`app.py`、`models.py`、`db.py`、`templates/`、`static/`）だけを直し、動作を確認する。
+- 確認で問題がなければ、同じ振る舞いを `powered_by_golang/` に反映する。確認が終わる前に Go 版を同時に直さない。
+- 反映時は `schedule.db` のスキーマを両版で揃える。GitHub Releases の exe は Go 版である。
+- Python だけの作業（開発用の手順、lint、PyInstaller）は Go 版へ写さない。ユーザーが Python 版だけと指定したときも Go 版は触らない。
