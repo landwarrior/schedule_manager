@@ -13,12 +13,12 @@ type Store struct {
 }
 
 type Settings struct {
-	ContractName        string
-	MemberCount         int
-	DisplayFrom         string
-	DisplayTo           string
-	PlannedUtilization  float64
-	Theme               string
+	ContractName       string
+	MemberCount        int
+	DisplayFrom        string
+	DisplayTo          string
+	PlannedUtilization float64
+	Theme              string
 }
 
 type Holiday struct {
@@ -646,9 +646,9 @@ func (s *Store) DeleteProject(projectID int) error {
 	return err
 }
 
-func (s *Store) ListAllocations(fromYM, toYM string) (map[AllocationKey]float64, error) {
+func (s *Store) ListAllocationCells(fromYM, toYM string) (map[AllocationKey][2]float64, error) {
 	rows, err := s.DB.Query(`
-		SELECT a.project_id, a.phase_id, a.year_month, a.decade, a.effort
+		SELECT a.project_id, a.phase_id, a.year_month, a.decade, a.effort, a.actual_effort
 		FROM allocations a
 		JOIN project_phases pp
 		  ON pp.project_id = a.project_id
@@ -661,25 +661,40 @@ func (s *Store) ListAllocations(fromYM, toYM string) (map[AllocationKey]float64,
 		return nil, err
 	}
 	defer rows.Close()
-	out := map[AllocationKey]float64{}
+	out := map[AllocationKey][2]float64{}
 	for rows.Next() {
 		var k AllocationKey
-		var effort float64
-		if err := rows.Scan(&k.ProjectID, &k.PhaseID, &k.YearMonth, &k.Decade, &effort); err != nil {
+		var effort, actual float64
+		if err := rows.Scan(&k.ProjectID, &k.PhaseID, &k.YearMonth, &k.Decade, &effort, &actual); err != nil {
 			return nil, err
 		}
-		out[k] = effort
+		out[k] = [2]float64{effort, actual}
 	}
 	return out, rows.Err()
 }
 
-func (s *Store) SetAllocation(projectID, phaseID int, yearMonth string, decade int, effort float64) error {
-	if decade < 1 || decade > 3 {
-		return fmt.Errorf("invalid decade")
+func (s *Store) ListAllocations(fromYM, toYM string) (map[AllocationKey]float64, error) {
+	cells, err := s.ListAllocationCells(fromYM, toYM)
+	if err != nil {
+		return nil, err
 	}
-	effort = calendar.RoundEffort(effort)
-	if !calendar.IsValidEffort(effort) {
-		return fmt.Errorf("effort must be in 0.1 increments")
+	out := map[AllocationKey]float64{}
+	for k, cell := range cells {
+		out[k] = cell[0]
+	}
+	return out, nil
+}
+
+func (s *Store) saveAllocationValue(projectID, phaseID int, yearMonth string, decade int, value float64, field string) (float64, float64, error) {
+	if field != "effort" && field != "actual_effort" {
+		return 0, 0, fmt.Errorf("invalid field")
+	}
+	if decade < 1 || decade > 3 {
+		return 0, 0, fmt.Errorf("invalid decade")
+	}
+	value = calendar.RoundEffort(value)
+	if !calendar.IsValidEffort(value) {
+		return 0, 0, fmt.Errorf("effort must be in 0.1 increments")
 	}
 	var enabled int
 	var inputMode string
@@ -687,35 +702,59 @@ func (s *Store) SetAllocation(projectID, phaseID int, yearMonth string, decade i
 		`SELECT enabled, input_mode FROM project_phases WHERE project_id = ? AND phase_id = ?`,
 		projectID, phaseID,
 	).Scan(&enabled, &inputMode)
-	if err == sql.ErrNoRows || enabled == 0 {
-		return fmt.Errorf("invalid phase")
+	if err == sql.ErrNoRows || (err == nil && (enabled == 0 || inputMode != "effort")) {
+		return 0, 0, fmt.Errorf("invalid phase")
 	}
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
-	if inputMode != "effort" {
-		return fmt.Errorf("invalid phase")
+
+	var effort, actual float64
+	err = s.DB.QueryRow(
+		`SELECT effort, actual_effort FROM allocations
+		 WHERE project_id = ? AND phase_id = ? AND year_month = ? AND decade = ?`,
+		projectID, phaseID, yearMonth, decade,
+	).Scan(&effort, &actual)
+	if err == sql.ErrNoRows {
+		effort, actual = 0, 0
+	} else if err != nil {
+		return 0, 0, err
 	}
-	if effort == 0 {
+	if field == "effort" {
+		effort = value
+	} else {
+		actual = value
+	}
+	if effort == 0 && actual == 0 {
 		_, err = s.DB.Exec(
 			`DELETE FROM allocations WHERE project_id = ? AND phase_id = ? AND year_month = ? AND decade = ?`,
 			projectID, phaseID, yearMonth, decade,
 		)
-		return err
+		return 0, 0, err
 	}
 	_, err = s.DB.Exec(
-		`INSERT INTO allocations (project_id, phase_id, year_month, decade, effort)
-		 VALUES (?, ?, ?, ?, ?)
+		`INSERT INTO allocations (project_id, phase_id, year_month, decade, effort, actual_effort)
+		 VALUES (?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(project_id, phase_id, year_month, decade)
-		 DO UPDATE SET effort = excluded.effort`,
-		projectID, phaseID, yearMonth, decade, effort,
+		 DO UPDATE SET effort = excluded.effort, actual_effort = excluded.actual_effort`,
+		projectID, phaseID, yearMonth, decade, effort, actual,
 	)
-	return err
+	return effort, actual, err
 }
 
-func (s *Store) AllocatedTotalsByProjectPhase() (map[[2]int]float64, error) {
+func (s *Store) SetAllocation(projectID, phaseID int, yearMonth string, decade int, effort float64) (float64, float64, error) {
+	return s.saveAllocationValue(projectID, phaseID, yearMonth, decade, effort, "effort")
+}
+
+func (s *Store) SetActualEffort(projectID, phaseID int, yearMonth string, decade int, actual float64) (float64, float64, error) {
+	return s.saveAllocationValue(projectID, phaseID, yearMonth, decade, actual, "actual_effort")
+}
+
+func (s *Store) AllocationTotalsByProjectPhase() (map[[2]int][2]float64, error) {
 	rows, err := s.DB.Query(`
-		SELECT a.project_id, a.phase_id, COALESCE(SUM(a.effort), 0) AS total
+		SELECT a.project_id, a.phase_id,
+		       COALESCE(SUM(a.effort), 0) AS total,
+		       COALESCE(SUM(a.actual_effort), 0) AS actual
 		FROM allocations a
 		JOIN project_phases pp
 		  ON pp.project_id = a.project_id
@@ -728,16 +767,28 @@ func (s *Store) AllocatedTotalsByProjectPhase() (map[[2]int]float64, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	out := map[[2]int]float64{}
+	out := map[[2]int][2]float64{}
 	for rows.Next() {
 		var projectID, phaseID int
-		var total float64
-		if err := rows.Scan(&projectID, &phaseID, &total); err != nil {
+		var total, actual float64
+		if err := rows.Scan(&projectID, &phaseID, &total, &actual); err != nil {
 			return nil, err
 		}
-		out[[2]int{projectID, phaseID}] = total
+		out[[2]int{projectID, phaseID}] = [2]float64{total, actual}
 	}
 	return out, rows.Err()
+}
+
+func (s *Store) AllocatedTotalsByProjectPhase() (map[[2]int]float64, error) {
+	totals, err := s.AllocationTotalsByProjectPhase()
+	if err != nil {
+		return nil, err
+	}
+	out := map[[2]int]float64{}
+	for key, value := range totals {
+		out[key] = value[0]
+	}
+	return out, nil
 }
 
 func trim(s string) string {

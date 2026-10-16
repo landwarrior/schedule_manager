@@ -8,17 +8,20 @@
 </section>
 {% endif %}
 <section class="toolbar schedule-toolbar">
-  <form class="inline-form schedule-range-form" method="get" action="{{ url_for('schedule') }}">
-    <div class="range-control">
-      <span class="range-label">表示期間</span>
-      <div class="range-fields">
-        <input type="text" name="from" value="{{ display_from }}" data-datepicker="month" placeholder="YYYY-MM" required aria-label="表示開始月">
-        <span class="range-sep">〜</span>
-        <input type="text" name="to" value="{{ display_to }}" data-datepicker="month" placeholder="YYYY-MM" required aria-label="表示終了月">
+  <div class="schedule-toolbar-main">
+    <form class="inline-form schedule-range-form" method="get" action="{{ url_for('schedule') }}">
+      <div class="range-control">
+        <span class="range-label">表示期間</span>
+        <div class="range-fields">
+          <input type="text" name="from" value="{{ display_from }}" data-datepicker="month" placeholder="YYYY-MM" required aria-label="表示開始月">
+          <span class="range-sep">〜</span>
+          <input type="text" name="to" value="{{ display_to }}" data-datepicker="month" placeholder="YYYY-MM" required aria-label="表示終了月">
+        </div>
       </div>
-    </div>
-    <button type="submit">表示</button>
-  </form>
+      <button type="submit">表示</button>
+    </form>
+    <button type="button" id="actual-mode-button" class="secondary" aria-pressed="false" title="実績入力モードにする">実績</button>
+  </div>
   <div class="schedule-toolbar-notes muted">
     <p>
       メンバー人数: {{ member_count }}人 ／ キャパ = 営業日 × 人数 ／
@@ -26,6 +29,7 @@
       （割当がキャパ×計画稼働率を超えると黄、キャパ到達で赤）
       ／ 差分 = 見積工数 − 割当済（プラスは割当不足、マイナスは見積が甘い）
       ／ 工数セルは矢印キーで移動
+      ／ 「実績」で実績入力に切り替え（ラベルは見積工数、入力済みセルは網掛け、割当済と割当合計は実績／見積）
     </p>
   </div>
 </section>
@@ -91,24 +95,37 @@
             </th>
             {% set ns.shown_name = true %}
           {% endif %}
-          <td class="sticky-col col-phase">{{ phase.name }}</td>
+          <td class="sticky-col col-phase {% if phase.input_mode == 'effort' and phase.actual > phase.allocated %}actual-over{% endif %}">{{ phase.name }}</td>
           {% if phase.input_mode == 'effort' %}
             <td class="sticky-col col-meta1 num" data-phase-total="{{ project.id }}-{{ phase.id }}">{{ '%.1f'|format(phase.total) }}</td>
-            <td class="sticky-col col-meta2 num" data-phase-allocated="{{ project.id }}-{{ phase.id }}">{{ '%.1f'|format(phase.allocated) }}</td>
+            <td class="sticky-col col-meta2 num" data-phase-allocated="{{ project.id }}-{{ phase.id }}">
+              <span class="sum-single">{{ '%.1f'|format(phase.allocated) }}</span>
+              <span class="sum-fraction" aria-hidden="true" title="分子は実績工数、分母は見積工数">
+                <span class="sum-num">{{ '%.1f'|format(phase.actual) }}</span>
+                <span class="sum-line" aria-hidden="true"></span>
+                <span class="sum-den">{{ '%.1f'|format(phase.allocated) }}</span>
+              </span>
+            </td>
             <td class="sticky-col col-meta3 num {% if phase.diff > 0 %}warn{% elif phase.diff < 0 %}diff-over{% endif %}" data-phase-diff="{{ project.id }}-{{ phase.id }}">{{ '%.1f'|format(phase.diff) }}</td>
             {% for cell in phase.cells %}
-              <td class="phase-cell color-{{ phase.color }} {% if cell.active %}active{% endif %}">
-                <input
-                  class="effort-input"
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value="{{ '%.1f'|format(cell.effort) if cell.effort else '' }}"
-                  data-project-id="{{ project.id }}"
-                  data-phase-id="{{ phase.id }}"
-                  data-ym="{{ cell.ym }}"
-                  data-decade="{{ cell.decade }}"
-                >
+              <td class="phase-cell color-{{ phase.color }} {% if cell.active %}active{% endif %} {% if cell.actual %}has-actual{% endif %}">
+                <label class="effort-field">
+                  <span class="effort-float-label" aria-hidden="true">{{ '%.1f'|format(cell.effort) if cell.effort else '' }}</span>
+                  <input
+                    class="effort-input"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value="{{ '%.1f'|format(cell.effort) if cell.effort else '' }}"
+                    aria-label="見積工数"
+                    data-project-id="{{ project.id }}"
+                    data-phase-id="{{ phase.id }}"
+                    data-ym="{{ cell.ym }}"
+                    data-decade="{{ cell.decade }}"
+                    data-estimate="{{ '%.1f'|format(cell.effort) if cell.effort else '' }}"
+                    data-actual="{{ '%.1f'|format(cell.actual) if cell.actual else '' }}"
+                  >
+                </label>
               </td>
             {% endfor %}
           {% else %}
@@ -139,7 +156,14 @@
       <tr>
         <th class="sticky-col col-project summary-label" colspan="5">割当合計（人日）</th>
         {% for item in summary %}
-          <td class="num {% if item.status == 'over' %}cap-over{% elif item.status == 'warn' %}cap-warn{% endif %}" data-sum="{{ item.ym }}-{{ item.decade }}">{{ '%.1f'|format(item.allocated) }}</td>
+          <td class="num {% if item.status == 'over' %}cap-over{% elif item.status == 'warn' %}cap-warn{% endif %}" data-sum="{{ item.ym }}-{{ item.decade }}">
+            <span class="sum-single">{{ '%.1f'|format(item.allocated) }}</span>
+            <span class="sum-fraction" aria-hidden="true" title="分子は実績工数、分母は見積工数">
+              <span class="sum-num">{{ '%.1f'|format(item.actual) }}</span>
+              <span class="sum-line" aria-hidden="true"></span>
+              <span class="sum-den">{{ '%.1f'|format(item.allocated) }}</span>
+            </span>
+          </td>
         {% endfor %}
       </tr>
     </tfoot>

@@ -41,6 +41,7 @@ html[data-theme="system"] {
   --sat: #2563eb;
   --danger-soft: #fecaca;
   --error-bg: #fef2f2;
+  --hatch: rgba(0, 0, 0, 0.16);
   --font-ui: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", sans-serif;
   --letter-spacing-ui: 0.06rem;
   --font-size-schedule: 0.85rem;
@@ -87,6 +88,7 @@ html[data-theme="dark"] {
   --sat: #93c5fd;
   --danger-soft: #7f1d1d;
   --error-bg: #3f1d1d;
+  --hatch: rgba(255, 255, 255, 0.2);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -130,6 +132,7 @@ html[data-theme="dark"] {
     --sat: #93c5fd;
     --danger-soft: #7f1d1d;
     --error-bg: #3f1d1d;
+    --hatch: rgba(255, 255, 255, 0.2);
   }
 }
 
@@ -208,6 +211,19 @@ a:hover { text-decoration: underline; }
   grid-template-columns: auto minmax(16rem, 1fr);
   align-items: end;
   gap: 1.25rem 1.5rem;
+}
+
+.schedule-toolbar-main {
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+#actual-mode-button[aria-pressed="true"] {
+  background: var(--button-bg);
+  color: var(--button-text);
+  border-color: var(--button-border);
 }
 
 .schedule-range-form {
@@ -570,6 +586,17 @@ legend {
 
 .phase-cell { text-align: center; color: transparent; }
 
+.phase-cell .effort-field {
+  display: inline-flex;
+  position: relative;
+  gap: 0;
+  vertical-align: middle;
+}
+
+.effort-float-label {
+  display: none;
+}
+
 .phase-cell.color-cyan.active {
   background: var(--phase-cyan-bg);
   color: var(--phase-cyan-text);
@@ -624,6 +651,15 @@ legend {
   box-shadow: inset 3px 0 0 var(--text);
 }
 
+.schedule-table.actual-mode td.col-phase.actual-over {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.schedule-table.actual-mode tbody tr.row-editing td.col-phase.actual-over {
+  color: var(--danger);
+}
+
 .schedule-table tbody.project-block:has(tr.row-editing) .col-project a {
   font-weight: 700;
 }
@@ -655,6 +691,91 @@ legend {
 .effort-input.error {
   outline: 2px solid var(--danger);
   background: var(--error-bg);
+}
+
+.schedule-table.actual-mode td.phase-cell:has(.effort-field) {
+  padding-top: 0.7rem;
+}
+
+.schedule-table.actual-mode .effort-float-label:not(:empty) {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0.28rem;
+  z-index: 2;
+  transform: translateY(-50%);
+  padding: 0 0.18rem;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
+.schedule-table.actual-mode .phase-cell.color-cyan.active .effort-float-label {
+  background: var(--phase-cyan-bg);
+  color: var(--phase-cyan-text);
+}
+
+.schedule-table.actual-mode .phase-cell.color-orange.active .effort-float-label {
+  background: var(--phase-orange-bg);
+  color: var(--phase-orange-text);
+}
+
+.schedule-table.actual-mode .phase-cell.color-green.active .effort-float-label {
+  background: var(--phase-green-bg);
+  color: var(--phase-green-text);
+}
+
+.schedule-table.actual-mode .phase-cell.color-lavender.active .effort-float-label {
+  background: var(--phase-lavender-bg);
+  color: var(--phase-lavender-text);
+}
+
+.schedule-table.actual-mode .phase-cell.has-actual {
+  position: relative;
+}
+
+.schedule-table.actual-mode .phase-cell.has-actual::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0 9px,
+    var(--hatch) 9px 10px
+  );
+}
+
+.schedule-table.actual-mode .phase-cell .effort-input {
+  position: relative;
+  z-index: 1;
+}
+
+.sum-fraction {
+  display: none;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 2.5rem;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+.sum-line {
+  border-top: 1px solid currentColor;
+  margin: 0.05rem 0;
+}
+
+.schedule-table.actual-mode .sum-single {
+  display: none;
+}
+
+.schedule-table.actual-mode .sum-fraction {
+  display: inline-flex;
 }
 
 .data-table { width: 100%; }

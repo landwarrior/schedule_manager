@@ -1,0 +1,14 @@
+{
+	"permissions": {
+		"allow": [
+			"Shell(.venv\\Scripts\\python.exe)",
+			"Shell(Get-ChildItem)",
+			"Shell(Copy-Item)",
+			"Shell(git diff)",
+			"Shell(gofmt)",
+			"Shell(go build)",
+			"Shell(go test)"
+		],
+		"deny": ["Read(.env*)", "Write(**/.env*)", "Write(**/*.key)"]
+	}
+}

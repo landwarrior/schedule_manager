@@ -31,6 +31,7 @@ from calendar_util import (
 from db import DB_PATH, init_db
 from models import (
     add_holiday,
+    allocation_totals_by_project_phase,
     allocated_totals_by_project_phase,
     create_phase_definition,
     create_project,
@@ -40,7 +41,7 @@ from models import (
     get_phase_definition,
     get_project,
     get_settings,
-    list_allocations,
+    list_allocation_cells,
     list_holiday_dates,
     list_holidays,
     list_phase_definitions,
@@ -48,6 +49,7 @@ from models import (
     phase_input_mode_label,
     reorder_phase_definitions,
     reorder_projects,
+    set_actual_effort,
     set_allocation,
     update_holiday,
     update_phase_definition,
@@ -234,18 +236,19 @@ def _parse_project_phases(form: MultiDict[str, str]) -> list[dict[str, Any]]:
 def _build_schedule_phase_rows(
     project: dict[str, Any],
     columns: Sequence[tuple[str, int]],
-    allocations: Mapping[tuple[int, int, str, int], float],
-    allocated_sums: Mapping[tuple[int, int], float],
+    allocation_cells: Mapping[tuple[int, int, str, int], tuple[float, float]],
+    allocated_sums: Mapping[tuple[int, int], tuple[float, float]],
 ) -> list[dict[str, Any]]:
     """プロジェクト 1 件分の有効工程からスケジュール表の行を組み立てる.
 
     Args:
         project (dict[str, Any]): 工程設定を含むプロジェクト dict。
         columns (Sequence[tuple[str, int]]): 表示対象の (年月, 旬) の列一覧。
-        allocations (Mapping[tuple[int, int, str, int], float]): 割当工数の dict
-            （キーは (project_id, phase_id, 年月, 旬)）。
-        allocated_sums (Mapping[tuple[int, int], float]): プロジェクト×工程ごとの
-            割当工数合計。
+        allocation_cells (Mapping[tuple[int, int, str, int], tuple[float, float]]):
+            セル工数の dict。キーは (project_id, phase_id, 年月, 旬)、
+            値は (見積工数, 実績工数)。
+        allocated_sums (Mapping[tuple[int, int], tuple[float, float]]):
+            プロジェクト×工程ごとの (見積割当合計, 実績割当合計)。
 
     Returns:
         list[dict[str, Any]]: テンプレートに渡す工程行 dict のリスト。
@@ -257,11 +260,19 @@ def _build_schedule_phase_rows(
         phase_id = phase["phase_id"]
         if phase["input_mode"] == "effort":
             cells = []
-            allocated = allocated_sums.get((project["id"], phase_id), 0.0)
+            allocated, actual_allocated = allocated_sums.get((project["id"], phase_id), (0.0, 0.0))
             total = float(phase["total_effort"] or 0.0)
             for ym, decade in columns:
-                effort = allocations.get((project["id"], phase_id, ym, decade), 0.0)
-                cells.append({"ym": ym, "decade": decade, "effort": effort, "active": effort > 0})
+                effort, actual = allocation_cells.get((project["id"], phase_id, ym, decade), (0.0, 0.0))
+                cells.append(
+                    {
+                        "ym": ym,
+                        "decade": decade,
+                        "effort": effort,
+                        "actual": actual,
+                        "active": effort > 0,
+                    }
+                )
             rows.append(
                 {
                     "id": phase_id,
@@ -270,6 +281,7 @@ def _build_schedule_phase_rows(
                     "color": phase["color"],
                     "total": total,
                     "allocated": round_effort(allocated),
+                    "actual": round_effort(actual_allocated),
                     "diff": round_effort(total - allocated),
                     "cells": cells,
                 }
@@ -333,17 +345,19 @@ def schedule() -> ResponseReturnValue:
     }
 
     projects = list_projects()
-    allocations = list_allocations(display_from, display_to)
-    allocated_sums = allocated_totals_by_project_phase()
+    allocation_cells = list_allocation_cells(display_from, display_to)
+    allocated_sums = allocation_totals_by_project_phase()
 
     period_totals: dict[tuple[str, int], float] = {(ym, d): 0.0 for ym, d in columns}
-    for (_project_id, _phase_id, ym, decade), effort in allocations.items():
+    period_actuals: dict[tuple[str, int], float] = {(ym, d): 0.0 for ym, d in columns}
+    for (_project_id, _phase_id, ym, decade), (effort, actual) in allocation_cells.items():
         if (ym, decade) in period_totals:
             period_totals[(ym, decade)] = round_effort(period_totals[(ym, decade)] + effort)
+            period_actuals[(ym, decade)] = round_effort(period_actuals[(ym, decade)] + actual)
 
     project_rows = []
     for project in projects:
-        phases = _build_schedule_phase_rows(project, columns, allocations, allocated_sums)
+        phases = _build_schedule_phase_rows(project, columns, allocation_cells, allocated_sums)
         project_rows.append(
             {
                 "id": project["id"],
@@ -357,6 +371,7 @@ def schedule() -> ResponseReturnValue:
     for ym, decade in columns:
         cap = capacities[(ym, decade)]
         allocated = period_totals[(ym, decade)]
+        actual = period_actuals[(ym, decade)]
         status = allocation_status(allocated, cap["capacity"], planned_utilization)
         summary.append(
             {
@@ -365,6 +380,7 @@ def schedule() -> ResponseReturnValue:
                 "business_days": cap["business_days"],
                 "capacity": cap["capacity"],
                 "allocated": allocated,
+                "actual": actual,
                 "status": status,
                 "warn_threshold": round_effort(cap["capacity"] * planned_utilization / 100.0),
             }
@@ -388,10 +404,12 @@ def schedule() -> ResponseReturnValue:
 
 @app.post("/api/allocations")
 def api_set_allocation() -> ResponseReturnValue:
-    """割当セル 1 件を更新し、最新の合計・キャパシティを JSON で返す.
+    """割当セル 1 件の見積または実績を更新し、最新の合計を JSON で返す.
+
+    ``kind`` が ``actual`` のとき実績工数、それ以外は見積工数を保存する。
 
     Returns:
-        ResponseReturnValue: ok / effort / period / phase を含む JSON。
+        ResponseReturnValue: ok / kind / effort / actual / period / phase を含む JSON。
             入力不正時は HTTP 400 とエラーメッセージ。
     """
     data = request.get_json(force=True, silent=True) or {}
@@ -400,23 +418,32 @@ def api_set_allocation() -> ResponseReturnValue:
         phase_id = int(data["phase_id"])
         year_month = data["year_month"]
         decade = int(data["decade"])
-        effort = _parse_effort(str(data.get("effort", 0)))
+        kind = str(data.get("kind") or "estimate")
+        if kind not in ("estimate", "actual"):
+            raise ValueError("入力対象が不正です")
+        value = _parse_effort(str(data.get("effort", 0)))
         parse_ym(year_month)
-        set_allocation(project_id, phase_id, year_month, decade, effort)
+        if kind == "actual":
+            effort, actual = set_actual_effort(project_id, phase_id, year_month, decade, value)
+        else:
+            effort, actual = set_allocation(project_id, phase_id, year_month, decade, value)
     except (KeyError, TypeError, ValueError) as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
 
     settings = get_settings()
     holidays = list_holiday_dates()
-    with_period = list_allocations(year_month, year_month)
-    period_total = round_effort(
-        sum(e for (_pid, _phase, ym, d), e in with_period.items() if ym == year_month and d == decade)
-    )
+    with_period = list_allocation_cells(year_month, year_month)
+    period_total = 0.0
+    period_actual = 0.0
+    for (_pid, _phase, ym, d), (cell_effort, cell_actual) in with_period.items():
+        if ym == year_month and d == decade:
+            period_total = round_effort(period_total + cell_effort)
+            period_actual = round_effort(period_actual + cell_actual)
     cap = capacity(year_month, decade, holidays, settings["member_count"])
     biz = business_days(year_month, decade, holidays)
     planned_utilization = float(settings["planned_utilization"] if settings["planned_utilization"] is not None else 80)
     status = allocation_status(period_total, cap, planned_utilization)
-    allocated_sums = allocated_totals_by_project_phase()
+    allocated_sums = allocation_totals_by_project_phase()
     project = get_project(project_id)
     phase_total = 0.0
     if project:
@@ -424,22 +451,28 @@ def api_set_allocation() -> ResponseReturnValue:
             if phase["phase_id"] == phase_id:
                 phase_total = float(phase["total_effort"] or 0.0)
                 break
-    phase_allocated = round_effort(allocated_sums.get((project_id, phase_id), 0.0))
+    phase_allocated, phase_actual = allocated_sums.get((project_id, phase_id), (0.0, 0.0))
+    phase_allocated = round_effort(phase_allocated)
+    phase_actual = round_effort(phase_actual)
 
     return jsonify(
         {
             "ok": True,
+            "kind": kind,
             "effort": effort,
+            "actual": actual,
             "period": {
                 "year_month": year_month,
                 "decade": decade,
                 "allocated": period_total,
+                "actual": period_actual,
                 "capacity": cap,
                 "business_days": biz,
                 "status": status,
             },
             "phase": {
                 "allocated": phase_allocated,
+                "actual": phase_actual,
                 "total": phase_total,
                 "diff": round_effort(phase_total - phase_allocated),
             },

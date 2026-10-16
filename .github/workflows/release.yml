@@ -22,27 +22,32 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          python-version: "3.14"
+          go-version-file: powered_by_golang/go.mod
+          cache-dependency-path: powered_by_golang/go.sum
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt "pyinstaller>=6.0"
+      - name: Generate Windows resources
+        working-directory: powered_by_golang
+        run: go run github.com/tc-hib/go-winres@v0.3.3 simply --arch amd64 --icon ..\assets\schedule_manager.ico --manifest cli --product-name "schedule_manager" --file-description "schedule_manager" --original-filename schedule_manager.exe --out rsrc
 
       - name: Build exe
-        run: pyinstaller --noconfirm schedule_manager.spec
+        working-directory: powered_by_golang
+        env:
+          CGO_ENABLED: "0"
+        run: go build -o dist\schedule_manager.exe .
 
       - name: Check exe exists
         shell: pwsh
         run: |
-          if (-not (Test-Path -LiteralPath "dist\schedule_manager.exe")) {
-            throw "dist\schedule_manager.exe が見つかりません"
+          if (-not (Test-Path -LiteralPath "powered_by_golang\dist\schedule_manager.exe")) {
+            throw "powered_by_golang\dist\schedule_manager.exe が見つかりません"
           }
 
       - name: Attach exe to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          files: dist/schedule_manager.exe
+          files: powered_by_golang/dist/schedule_manager.exe
           fail_on_unmatched_files: true

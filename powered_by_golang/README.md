@@ -21,6 +21,8 @@ go run .
 
 ## 実行ファイルのビルド
 
+GitHub Releases（タグ `v*`）の公開時に、この exe が Assets の `schedule_manager.exe` として添付されます。
+
 ```bat
 cd powered_by_golang
 build.bat

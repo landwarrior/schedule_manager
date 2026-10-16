@@ -8,7 +8,7 @@
 
 - ランタイム: Python **3.14+** / Flask / SQLite（`schedule.db`）
 - UI: Jinja2 テンプレート + `static/` の CSS / JS（フロントエンドフレームワークなし）
-- 配布: PyInstaller で単一 exe（`schedule_manager.spec` / GitHub Releases）
+- 配布: Go 版の単一 exe（`powered_by_golang` / GitHub Releases）。Python 版は `build_exe.bat` で別途ビルドできる
 
 ## ディレクトリ構成
 
@@ -22,7 +22,7 @@
 | `templates/` | Jinja2 HTML |
 | `static/` | CSS / JS |
 | `assets/` | アイコン等の素材 |
-| `.github/workflows/release.yml` | タグ `v*` の Release 公開時に exe をビルドして添付 |
+| `.github/workflows/release.yml` | タグ `v*` の Release 公開時に Go 版 exe をビルドして添付 |
 
 ORM は使いません。SQL は `db.py`（スキーマ）と `models.py`（クエリ）に集約します。
 
@@ -30,6 +30,7 @@ ORM は使いません。SQL は `db.py`（スキーマ）と `models.py`（ク�
 
 - **旬**: 1=上旬(1–10日)、2=中旬(11–20日)、3=下旬(21日–月末)
 - **入力方式**: `effort`（工数入力・0.1 人日刻み） / `period`（期間のみ・色表示）
+- **予実**: 見積は `allocations.effort`、実績は `allocations.actual_effort`。スケジュールの「実績」で実績入力モードになる。割当合計の警告色は見積合計で判定する
 - **キャパ**: 営業日（土日＋祝日マスタ除外）× メンバー人数
 - **警告**: 割当合計 > キャパ × 計画稼働率 → 黄、≥ キャパ → 赤
 - 工程マスタは共通定義（名称・色・表示順）。**入力方式はプロジェクト設定ごと**（`project_phases.input_mode`）

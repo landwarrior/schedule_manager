@@ -1,8 +1,26 @@
 (() => {
   const table = document.querySelector(".schedule-table");
   const inputs = document.querySelectorAll(".effort-input");
+  const actualModeButton = document.getElementById("actual-mode-button");
+  let actualMode = false;
   let activeRow = null;
   let activeColEls = [];
+
+  function formatEffort(value) {
+    const number = Number(value);
+    if (!number) {
+      return "";
+    }
+    return number.toFixed(1);
+  }
+
+  function formatSum(value) {
+    const number = Number(value);
+    if (Number.isNaN(number)) {
+      return "0.0";
+    }
+    return number.toFixed(1);
+  }
 
   function syncStickyOffsets() {
     if (!table) {
@@ -183,10 +201,74 @@
     clearActiveColumn();
   }
 
-  function syncEffortStyle(input, effort) {
+  function syncEffortStyle(input) {
     const cell = input.closest(".phase-cell");
-    if (cell) {
-      cell.classList.toggle("active", Number(effort) > 0);
+    if (!cell) {
+      return;
+    }
+    cell.classList.toggle("active", Number(input.dataset.estimate || 0) > 0);
+    cell.classList.toggle("has-actual", Number(input.dataset.actual || 0) > 0);
+    const label = cell.querySelector(".effort-float-label");
+    if (label) {
+      label.textContent = input.dataset.estimate || "";
+    }
+  }
+
+  function applyInputForMode(input) {
+    const next = actualMode ? input.dataset.actual || "" : input.dataset.estimate || "";
+    input.value = next;
+    input.dataset.lastSaved = next;
+    input.classList.remove("error");
+    if (actualMode) {
+      const estimate = input.dataset.estimate;
+      input.setAttribute("aria-label", estimate ? `実績工数（見積 ${estimate}）` : "実績工数");
+    } else {
+      input.setAttribute("aria-label", "見積工数");
+    }
+  }
+
+  function setActualMode(enabled) {
+    actualMode = enabled;
+    if (table) {
+      table.classList.toggle("actual-mode", enabled);
+    }
+    if (actualModeButton) {
+      actualModeButton.setAttribute("aria-pressed", enabled ? "true" : "false");
+      actualModeButton.title = enabled ? "見積入力モードに戻る" : "実績入力モードにする";
+    }
+    inputs.forEach((input) => {
+      applyInputForMode(input);
+    });
+    document.querySelectorAll(".sum-single").forEach((el) => {
+      el.setAttribute("aria-hidden", enabled ? "true" : "false");
+    });
+    document.querySelectorAll(".sum-fraction").forEach((el) => {
+      el.setAttribute("aria-hidden", enabled ? "false" : "true");
+    });
+  }
+
+  function renderFraction(el, allocated, actual) {
+    const single = el.querySelector(".sum-single");
+    const numerator = el.querySelector(".sum-num");
+    const denominator = el.querySelector(".sum-den");
+    if (single) {
+      single.textContent = formatSum(allocated);
+    }
+    if (numerator) {
+      numerator.textContent = formatSum(actual);
+    }
+    if (denominator) {
+      denominator.textContent = formatSum(allocated);
+    }
+  }
+
+  function renderPeriodSum(sumEl, allocated, actual, status) {
+    renderFraction(sumEl, allocated, actual);
+    sumEl.classList.remove("cap-warn", "cap-over");
+    if (status === "over") {
+      sumEl.classList.add("cap-over");
+    } else if (status === "warn") {
+      sumEl.classList.add("cap-warn");
     }
   }
 
@@ -225,6 +307,7 @@
           year_month: input.dataset.ym,
           decade: Number(input.dataset.decade),
           effort,
+          kind: actualMode ? "actual" : "estimate",
         }),
       });
       const data = await res.json();
@@ -232,14 +315,21 @@
         throw new Error(data.error || "保存に失敗しました");
       }
 
-      input.value = data.effort ? data.effort.toFixed(1) : "";
-      input.dataset.lastSaved = input.value;
-      syncEffortStyle(input, data.effort);
+      input.dataset.estimate = formatEffort(data.effort);
+      input.dataset.actual = formatEffort(data.actual);
+      applyInputForMode(input);
+      syncEffortStyle(input);
 
       const key = `${input.dataset.projectId}-${input.dataset.phaseId}`;
       const allocatedEl = document.querySelector(`[data-phase-allocated="${key}"]`);
       const diffEl = document.querySelector(`[data-phase-diff="${key}"]`);
-      if (allocatedEl) allocatedEl.textContent = data.phase.allocated.toFixed(1);
+      if (allocatedEl) {
+        renderFraction(allocatedEl, data.phase.allocated, data.phase.actual);
+        const phaseEl = allocatedEl.closest("tr")?.querySelector(".col-phase");
+        if (phaseEl) {
+          phaseEl.classList.toggle("actual-over", Number(data.phase.actual) > Number(data.phase.allocated));
+        }
+      }
       if (diffEl) {
         diffEl.textContent = data.phase.diff.toFixed(1);
         diffEl.classList.toggle("warn", data.phase.diff > 0);
@@ -249,13 +339,7 @@
       const periodKey = `${data.period.year_month}-${data.period.decade}`;
       const sumEl = document.querySelector(`[data-sum="${periodKey}"]`);
       if (sumEl) {
-        sumEl.textContent = data.period.allocated.toFixed(1);
-        sumEl.classList.remove("cap-warn", "cap-over");
-        if (data.period.status === "over") {
-          sumEl.classList.add("cap-over");
-        } else if (data.period.status === "warn") {
-          sumEl.classList.add("cap-warn");
-        }
+        renderPeriodSum(sumEl, data.period.allocated, data.period.actual, data.period.status);
       }
     } catch (err) {
       input.classList.add("error");
@@ -268,7 +352,7 @@
   inputs.forEach((input) => {
     let timer = null;
     input.dataset.lastSaved = input.value.trim() === "" ? "" : input.value.trim();
-    syncEffortStyle(input, input.value.trim() === "" ? 0 : Number(input.value));
+    syncEffortStyle(input);
     input.addEventListener("focus", () => {
       setActiveRow(input);
       scrollEffortIntoView(input);
@@ -291,6 +375,12 @@
       timer = setTimeout(() => saveInput(input), 500);
     });
   });
+
+  if (actualModeButton) {
+    actualModeButton.addEventListener("click", () => {
+      setActualMode(!actualMode);
+    });
+  }
 
   syncStickyOffsets();
   window.addEventListener("resize", syncStickyOffsets);

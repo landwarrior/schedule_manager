@@ -621,23 +621,64 @@ def delete_project(project_id: int) -> None:
         conn.commit()
 
 
-def list_allocations(from_ym: str, to_ym: str) -> dict[tuple[int, int, str, int], float]:
-    """指定期間内の有効な工数割当をキー付き dict で返す.
+def _normalize_cell_effort(decade: int, effort: float) -> float:
+    """旬と工数を検証し、0.1 刻みに丸めて返す.
 
-    有効かつ入力方式が effort の工程の割当のみを対象とする。
+    Args:
+        decade (int): 旬（1=上旬, 2=中旬, 3=下旬）。
+        effort (float): 工数（人日）。
+
+    Returns:
+        float: 0.1 刻みに丸めた工数。
+
+    Raises:
+        ValueError: 旬または工数が不正な場合。
+    """
+    if decade not in (1, 2, 3):
+        raise ValueError("invalid decade")
+    effort = round_effort(effort)
+    if not is_valid_effort(effort):
+        raise ValueError("effort must be in 0.1 increments")
+    return effort
+
+
+def _assert_effort_phase(conn: sqlite3.Connection, project_id: int, phase_id: int) -> None:
+    """対象工程が表示中の工数入力であることを確認する.
+
+    Args:
+        conn (sqlite3.Connection): SQLite 接続。
+        project_id (int): プロジェクト id。
+        phase_id (int): 工程マスタ id。
+
+    Raises:
+        ValueError: 工程が無効、または工数入力でない場合。
+    """
+    linked = conn.execute(
+        "SELECT enabled, input_mode FROM project_phases WHERE project_id = ? AND phase_id = ?",
+        (project_id, phase_id),
+    ).fetchone()
+    if linked is None or not linked["enabled"] or linked["input_mode"] != "effort":
+        raise ValueError("invalid phase")
+
+
+def list_allocation_cells(from_ym: str, to_ym: str) -> dict[tuple[int, int, str, int], tuple[float, float]]:
+    """指定期間内の見積工数と実績工数をキー付き dict で返す.
+
+    有効かつ入力方式が effort の工程のみを対象とする。
 
     Args:
         from_ym (str): 開始年月（YYYY-MM、含む）。
         to_ym (str): 終了年月（YYYY-MM、含む）。
 
     Returns:
-        dict[tuple[int, int, str, int], float]: (project_id, phase_id, year_month,
-            decade) をキー、工数を値とする dict。
+        dict[tuple[int, int, str, int], tuple[float, float]]:
+            (project_id, phase_id, year_month, decade) をキー、
+            (見積工数, 実績工数) を値とする dict。
     """
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT a.project_id, a.phase_id, a.year_month, a.decade, a.effort
+            SELECT a.project_id, a.phase_id, a.year_month, a.decade, a.effort, a.actual_effort
             FROM allocations a
             JOIN project_phases pp
               ON pp.project_id = a.project_id
@@ -648,67 +689,154 @@ def list_allocations(from_ym: str, to_ym: str) -> dict[tuple[int, int, str, int]
             """,
             (from_ym, to_ym),
         ).fetchall()
-        return {(row["project_id"], row["phase_id"], row["year_month"], row["decade"]): row["effort"] for row in rows}
+        return {
+            (row["project_id"], row["phase_id"], row["year_month"], row["decade"]): (
+                float(row["effort"]),
+                float(row["actual_effort"]),
+            )
+            for row in rows
+        }
 
 
-def set_allocation(project_id: int, phase_id: int, year_month: str, decade: int, effort: float) -> None:
-    """工程×年月×旬のセルに工数を登録・更新・削除する.
+def _save_allocation_value(
+    project_id: int,
+    phase_id: int,
+    year_month: str,
+    decade: int,
+    value: float,
+    *,
+    field: str,
+) -> tuple[float, float]:
+    """セルの見積工数または実績工数を保存する.
 
-    effort が 0 の場合は行を削除し、それ以外は upsert する。
+    見積と実績がともに 0 のときは行を削除する。片方だけ残る場合は行を保持する。
 
     Args:
         project_id (int): プロジェクト id。
         phase_id (int): 工程マスタ id。
         year_month (str): 年月（YYYY-MM）。
         decade (int): 旬（1=上旬, 2=中旬, 3=下旬）。
-        effort (float): 工数（人日、0.1 刻み）。
+        value (float): 保存する工数（人日、0.1 刻み）。
+        field (str): ``"effort"``（見積）または ``"actual_effort"``（実績）。
+
+    Returns:
+        tuple[float, float]: 保存後の (見積工数, 実績工数)。
 
     Raises:
-        ValueError: 旬や工数が不正、または工程が無効・effort モードでない場合。
+        ValueError: 旬・工数・工程・対象フィールドが不正な場合。
     """
-    if decade not in (1, 2, 3):
-        raise ValueError("invalid decade")
-    effort = round_effort(effort)
-    if not is_valid_effort(effort):
-        raise ValueError("effort must be in 0.1 increments")
+    if field not in ("effort", "actual_effort"):
+        raise ValueError("invalid field")
+    value = _normalize_cell_effort(decade, value)
     with get_connection() as conn:
-        linked = conn.execute(
-            "SELECT enabled, input_mode FROM project_phases WHERE project_id = ? AND phase_id = ?",
-            (project_id, phase_id),
+        _assert_effort_phase(conn, project_id, phase_id)
+        row = conn.execute(
+            """
+            SELECT effort, actual_effort
+            FROM allocations
+            WHERE project_id = ? AND phase_id = ? AND year_month = ? AND decade = ?
+            """,
+            (project_id, phase_id, year_month, decade),
         ).fetchone()
-        if linked is None or not linked["enabled"]:
-            raise ValueError("invalid phase")
-        if linked["input_mode"] != "effort":
-            raise ValueError("invalid phase")
-        if effort == 0:
+        effort = float(row["effort"]) if row else 0.0
+        actual = float(row["actual_effort"]) if row else 0.0
+        if field == "effort":
+            effort = value
+        else:
+            actual = value
+        if effort == 0 and actual == 0:
             conn.execute(
                 "DELETE FROM allocations WHERE project_id = ? AND phase_id = ? AND year_month = ? AND decade = ?",
                 (project_id, phase_id, year_month, decade),
             )
         else:
             conn.execute(
-                "INSERT INTO allocations (project_id, phase_id, year_month, decade, effort) "
-                "VALUES (?, ?, ?, ?, ?) "
+                "INSERT INTO allocations (project_id, phase_id, year_month, decade, effort, actual_effort) "
+                "VALUES (?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(project_id, phase_id, year_month, decade) "
-                "DO UPDATE SET effort = excluded.effort",
-                (project_id, phase_id, year_month, decade, effort),
+                "DO UPDATE SET effort = excluded.effort, actual_effort = excluded.actual_effort",
+                (project_id, phase_id, year_month, decade, effort, actual),
             )
         conn.commit()
+    return effort, actual
 
 
-def allocated_totals_by_project_phase() -> dict[tuple[int, int], float]:
-    """プロジェクト×工程ごとの割当工数合計を返す.
+def set_allocation(
+    project_id: int,
+    phase_id: int,
+    year_month: str,
+    decade: int,
+    effort: float,
+) -> tuple[float, float]:
+    """工程×年月×旬のセルに見積工数を登録・更新する.
 
-    有効かつ入力方式が effort の工程のみを対象とする。
+    見積が 0 でも実績が残っていれば行は削除しない。
+
+    Args:
+        project_id (int): プロジェクト id。
+        phase_id (int): 工程マスタ id。
+        year_month (str): 年月（YYYY-MM）。
+        decade (int): 旬（1=上旬, 2=中旬, 3=下旬）。
+        effort (float): 見積工数（人日、0.1 刻み）。
 
     Returns:
-        dict[tuple[int, int], float]: (project_id, phase_id) をキー、割当工数の合計を
-            値とする dict。
+        tuple[float, float]: 保存後の (見積工数, 実績工数)。
+
+    Raises:
+        ValueError: 旬や工数が不正、または工程が無効・effort モードでない場合。
+    """
+    return _save_allocation_value(project_id, phase_id, year_month, decade, effort, field="effort")
+
+
+def set_actual_effort(
+    project_id: int,
+    phase_id: int,
+    year_month: str,
+    decade: int,
+    actual_effort: float,
+) -> tuple[float, float]:
+    """工程×年月×旬のセルに実績工数を登録・更新する.
+
+    実績が 0 でも見積が残っていれば行は削除しない。
+
+    Args:
+        project_id (int): プロジェクト id。
+        phase_id (int): 工程マスタ id。
+        year_month (str): 年月（YYYY-MM）。
+        decade (int): 旬（1=上旬, 2=中旬, 3=下旬）。
+        actual_effort (float): 実績工数（人日、0.1 刻み）。
+
+    Returns:
+        tuple[float, float]: 保存後の (見積工数, 実績工数)。
+
+    Raises:
+        ValueError: 旬や工数が不正、または工程が無効・effort モードでない場合。
+    """
+    return _save_allocation_value(
+        project_id,
+        phase_id,
+        year_month,
+        decade,
+        actual_effort,
+        field="actual_effort",
+    )
+
+
+def allocation_totals_by_project_phase() -> dict[tuple[int, int], tuple[float, float]]:
+    """プロジェクト×工程ごとの見積割当と実績割当の合計を返す.
+
+    有効かつ入力方式が effort の工程のみを対象とする。表示期間では絞らない。
+
+    Returns:
+        dict[tuple[int, int], tuple[float, float]]: (project_id, phase_id) をキー、
+            (見積割当合計, 実績割当合計) を値とする dict。
     """
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT a.project_id, a.phase_id, COALESCE(SUM(a.effort), 0) AS total
+            SELECT a.project_id, a.phase_id,
+                   COALESCE(SUM(a.effort), 0) AS total,
+                   COALESCE(SUM(a.actual_effort), 0) AS actual
             FROM allocations a
             JOIN project_phases pp
               ON pp.project_id = a.project_id
@@ -718,7 +846,22 @@ def allocated_totals_by_project_phase() -> dict[tuple[int, int], float]:
             GROUP BY a.project_id, a.phase_id
             """
         ).fetchall()
-        return {(row["project_id"], row["phase_id"]): row["total"] for row in rows}
+        return {
+            (row["project_id"], row["phase_id"]): (float(row["total"]), float(row["actual"]))
+            for row in rows
+        }
+
+
+def allocated_totals_by_project_phase() -> dict[tuple[int, int], float]:
+    """プロジェクト×工程ごとの見積割当工数合計を返す.
+
+    有効かつ入力方式が effort の工程のみを対象とする。
+
+    Returns:
+        dict[tuple[int, int], float]: (project_id, phase_id) をキー、見積割当工数の合計を
+            値とする dict。
+    """
+    return {key: effort for key, (effort, _actual) in allocation_totals_by_project_phase().items()}
 
 
 def phase_input_mode_label(mode: str) -> str:
