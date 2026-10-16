@@ -72,6 +72,9 @@ build_exe.bat
 
 ## エージェントへの注意
 
+- 機能修正と動作確認は **Python 版を先に**行う。確認で問題がなければ、同じ振る舞いを `powered_by_golang/` に反映する。確認前に Go 版を同時に直さない。ユーザーは Go をほとんど使わない。
+- 反映時は `schedule.db` のスキーマを両版で揃える。GitHub Releases の exe は Go 版である。
+- Python だけの作業（開発手順、lint、PyInstaller）や、Python 版だけと指定された変更は Go 版へ写さない。
 - 不要なリファクタ・ドキュメント追加・依存追加はしない。依頼範囲に集中する
 - README のユーザー手順と実装がずれる変更をしたら、README も合わせて更新する
 - exe / パス周りを触るときは `paths.py` と PyInstaller の凍結実行の両方を意識する
