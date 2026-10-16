@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS allocations (
     year_month TEXT NOT NULL,
     decade INTEGER NOT NULL CHECK (decade IN (1, 2, 3)),
     effort REAL NOT NULL DEFAULT 0,
+    actual_effort REAL NOT NULL DEFAULT 0,
     PRIMARY KEY (project_id, phase_id, year_month, decade),
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     FOREIGN KEY (phase_id) REFERENCES phase_definitions(id) ON DELETE CASCADE
@@ -103,6 +104,9 @@ func initDB(conn *sql.DB) error {
 		return err
 	}
 	if err := migrateLegacySchema(conn); err != nil {
+		return err
+	}
+	if err := ensureAllocationsColumns(conn); err != nil {
 		return err
 	}
 	var id int
@@ -180,6 +184,21 @@ func ensureSettingsColumns(conn *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+func ensureAllocationsColumns(conn *sql.DB) error {
+	exists, err := tableExists(conn, "allocations")
+	if err != nil || !exists {
+		return err
+	}
+	cols, err := columnsOf(conn, "allocations")
+	if err != nil {
+		return err
+	}
+	if !cols["actual_effort"] {
+		_, err = conn.Exec(`ALTER TABLE allocations ADD COLUMN actual_effort REAL NOT NULL DEFAULT 0`)
+	}
+	return err
 }
 
 func ensureProjectPhasesColumns(conn *sql.DB) error {
@@ -400,6 +419,7 @@ func migrateLegacySchema(conn *sql.DB) error {
 				year_month TEXT NOT NULL,
 				decade INTEGER NOT NULL CHECK (decade IN (1, 2, 3)),
 				effort REAL NOT NULL DEFAULT 0,
+				actual_effort REAL NOT NULL DEFAULT 0,
 				PRIMARY KEY (project_id, phase_id, year_month, decade),
 				FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
 				FOREIGN KEY (phase_id) REFERENCES phase_definitions(id) ON DELETE CASCADE

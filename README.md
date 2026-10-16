@@ -16,11 +16,11 @@
 1. **実行ファイル（exe）を使う** … Python 不要。下の「配布物の入手」または自分でビルド
 2. **ソースから起動する** … 開発・改造向け
 
-> Go 実装は `powered_by_golang/` にあります。起動方法は同ディレクトリの `README.md` を参照してください。実績入力は Python 版の機能です。SQLite（`schedule.db`）は、実績工数カラム（未入力は 0）が増えている点以外、Go 版からも読み書きできます。
+> Go 実装（同等機能）は `powered_by_golang/` にあります。起動方法は同ディレクトリの `README.md` を参照してください。SQLite（`schedule.db`）のスキーマは Python 版と互換です。
 
 ### 配布物の入手（推奨）
 
-GitHub の **Releases** から `schedule_manager.exe` をダウンロードします。
+GitHub の **Releases** から Go 版の `schedule_manager.exe` をダウンロードします。
 
 1. リポジトリページの右サイド（または上部）の **Releases** を開く
 2. 最新リリースの Assets から `schedule_manager.exe` を入手する
@@ -47,7 +47,9 @@ python app.py
 
 ### 実行ファイル（exe）の作成
 
-Python 環境が無い PC 向けに、単一の exe を自分でビルドできます。
+Releases に添付される exe は Go 版です。自分で作る場合は `powered_by_golang/README.md` の手順（`build.bat`）を使います。
+
+Python 版の exe は、次の手順で別にビルドできます。
 
 ```bat
 .venv\Scripts\activate.bat

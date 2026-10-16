@@ -106,10 +106,10 @@ func NewApp(store *models.Store, templateFS fs.FS, staticFS fs.FS) (*App, error)
 		"eqIntPtr": func(p *int, v int) bool {
 			return p != nil && *p == v
 		},
-		"gt":  func(a, b float64) bool { return a > b },
-		"lt":  func(a, b float64) bool { return a < b },
-		"eq":  func(a, b any) bool { return a == b },
-		"ne":  func(a, b any) bool { return a != b },
+		"gt": func(a, b float64) bool { return a > b },
+		"lt": func(a, b float64) bool { return a < b },
+		"eq": func(a, b any) bool { return a == b },
+		"ne": func(a, b any) bool { return a != b },
 		"dict": func(values ...any) (map[string]any, error) {
 			if len(values)%2 != 0 {
 				return nil, fmt.Errorf("dict requires even args")
@@ -173,15 +173,15 @@ type flashMsg struct {
 }
 
 type baseData struct {
-	UITheme           string
-	ThemeChoices      []string
-	ThemeLabels       map[string]string
-	PhaseColorLabels  map[string]string
-	Flash             []flashMsg
-	RequestPath       string
-	Title             string
-	BodyClass         string
-	ContentTemplate   string
+	UITheme          string
+	ThemeChoices     []string
+	ThemeLabels      map[string]string
+	PhaseColorLabels map[string]string
+	Flash            []flashMsg
+	RequestPath      string
+	Title            string
+	BodyClass        string
+	ContentTemplate  string
 }
 
 func (a *App) base(r *http.Request, title, bodyClass, content string) baseData {
@@ -405,10 +405,11 @@ func (a *App) parseProjectPhases(r *http.Request) ([]models.PhaseConfig, error) 
 }
 
 type scheduleCell struct {
-	YM      string
-	Decade  int
-	Effort  float64
-	Active  bool
+	YM     string
+	Decade int
+	Effort float64
+	Actual float64
+	Active bool
 }
 
 type schedulePhaseRow struct {
@@ -418,6 +419,7 @@ type schedulePhaseRow struct {
 	Color     string
 	Total     float64
 	Allocated float64
+	Actual    float64
 	Diff      float64
 	Cells     []scheduleCell
 }
@@ -435,28 +437,29 @@ type summaryItem struct {
 	BusinessDays  int
 	Capacity      float64
 	Allocated     float64
+	Actual        float64
 	Status        string
 	WarnThreshold float64
 }
 
 type schedulePageData struct {
 	baseData
-	ContractName        string
-	DisplayFrom         string
-	DisplayTo           string
-	Months              []string
-	DecadeLabels        map[int]string
-	Projects            []scheduleProjectRow
-	Summary             []summaryItem
-	MemberCount         int
-	PlannedUtilization  float64
+	ContractName       string
+	DisplayFrom        string
+	DisplayTo          string
+	Months             []string
+	DecadeLabels       map[int]string
+	Projects           []scheduleProjectRow
+	Summary            []summaryItem
+	MemberCount        int
+	PlannedUtilization float64
 }
 
 func (a *App) buildSchedulePhaseRows(
 	project models.Project,
 	columns [][2]any,
-	allocations map[models.AllocationKey]float64,
-	allocatedSums map[[2]int]float64,
+	allocations map[models.AllocationKey][2]float64,
+	allocatedSums map[[2]int][2]float64,
 ) []schedulePhaseRow {
 	var rows []schedulePhaseRow
 	for _, phase := range project.Phases {
@@ -464,18 +467,23 @@ func (a *App) buildSchedulePhaseRows(
 			continue
 		}
 		if phase.InputMode == "effort" {
-			allocated := allocatedSums[[2]int{project.ID, phase.PhaseID}]
+			sums := allocatedSums[[2]int{project.ID, phase.PhaseID}]
+			allocated := sums[0]
+			actualAllocated := sums[1]
 			total := phase.TotalEffort
 			var cells []scheduleCell
 			for _, col := range columns {
 				ym := col[0].(string)
 				decade := col[1].(int)
-				effort := allocations[models.AllocationKey{ProjectID: project.ID, PhaseID: phase.PhaseID, YearMonth: ym, Decade: decade}]
-				cells = append(cells, scheduleCell{YM: ym, Decade: decade, Effort: effort, Active: effort > 0})
+				cell := allocations[models.AllocationKey{ProjectID: project.ID, PhaseID: phase.PhaseID, YearMonth: ym, Decade: decade}]
+				cells = append(cells, scheduleCell{
+					YM: ym, Decade: decade, Effort: cell[0], Actual: cell[1], Active: cell[0] > 0,
+				})
 			}
 			rows = append(rows, schedulePhaseRow{
 				ID: phase.PhaseID, Name: phase.Name, InputMode: "effort", Color: phase.Color,
-				Total: total, Allocated: calendar.RoundEffort(allocated), Diff: calendar.RoundEffort(total - allocated), Cells: cells,
+				Total: total, Allocated: calendar.RoundEffort(allocated), Actual: calendar.RoundEffort(actualAllocated),
+				Diff: calendar.RoundEffort(total - allocated), Cells: cells,
 			})
 		} else {
 			var cells []scheduleCell
@@ -547,25 +555,28 @@ func (a *App) schedule(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	allocations, err := a.Store.ListAllocations(displayFrom, displayTo)
+	allocations, err := a.Store.ListAllocationCells(displayFrom, displayTo)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	allocatedSums, err := a.Store.AllocatedTotalsByProjectPhase()
+	allocatedSums, err := a.Store.AllocationTotalsByProjectPhase()
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
 	periodTotals := map[[2]any]float64{}
+	periodActuals := map[[2]any]float64{}
 	for _, col := range columns {
 		periodTotals[col] = 0
+		periodActuals[col] = 0
 	}
-	for k, effort := range allocations {
+	for k, cell := range allocations {
 		key := [2]any{k.YearMonth, k.Decade}
 		if _, ok := periodTotals[key]; ok {
-			periodTotals[key] = calendar.RoundEffort(periodTotals[key] + effort)
+			periodTotals[key] = calendar.RoundEffort(periodTotals[key] + cell[0])
+			periodActuals[key] = calendar.RoundEffort(periodActuals[key] + cell[1])
 		}
 	}
 
@@ -584,9 +595,10 @@ func (a *App) schedule(w http.ResponseWriter, r *http.Request) {
 		biz, _ := calendar.BusinessDays(ym, decade, holidays)
 		cap, _ := calendar.Capacity(ym, decade, holidays, memberCount)
 		allocated := periodTotals[col]
+		actual := periodActuals[col]
 		status := calendar.AllocationStatus(allocated, cap, planned)
 		summary = append(summary, summaryItem{
-			YM: ym, Decade: decade, BusinessDays: biz, Capacity: cap, Allocated: allocated,
+			YM: ym, Decade: decade, BusinessDays: biz, Capacity: cap, Allocated: allocated, Actual: actual,
 			Status: status, WarnThreshold: calendar.RoundEffort(cap * planned / 100),
 		})
 	}
@@ -604,7 +616,7 @@ func (a *App) schedule(w http.ResponseWriter, r *http.Request) {
 		PlannedUtilization: planned,
 	}
 	// Re-attach flash after clearFlash consumed cookie on response; take from request cookie already done in base.
-	// clearFlash clears cookie for next request; current render already has flash from takeFlash in base... 
+	// clearFlash clears cookie for next request; current render already has flash from takeFlash in base...
 	// but we called clearFlash before base which reads cookie - order is wrong!
 	// Fix: base already called takeFlash from request cookie. clearFlash only affects response Set-Cookie.
 	// Actually we call clearFlash(w) first, then a.base(r,...) which reads r.Cookie - request cookie still present. Good.
@@ -613,21 +625,29 @@ func (a *App) schedule(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) apiSetAllocation(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		ProjectID int     `json:"project_id"`
-		PhaseID   int     `json:"phase_id"`
-		YearMonth string  `json:"year_month"`
-		Decade    int     `json:"decade"`
-		Effort    any     `json:"effort"`
+		ProjectID int    `json:"project_id"`
+		PhaseID   int    `json:"phase_id"`
+		YearMonth string `json:"year_month"`
+		Decade    int    `json:"decade"`
+		Effort    any    `json:"effort"`
+		Kind      string `json:"kind"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	if body.Kind == "" {
+		body.Kind = "estimate"
+	}
+	if body.Kind != "estimate" && body.Kind != "actual" {
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "入力対象が不正です"})
 		return
 	}
 	effortStr := fmt.Sprint(body.Effort)
 	if body.Effort == nil {
 		effortStr = "0"
 	}
-	effort, err := parseEffort(effortStr)
+	value, err := parseEffort(effortStr)
 	if err != nil {
 		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
 		return
@@ -636,7 +656,13 @@ func (a *App) apiSetAllocation(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
-	if err := a.Store.SetAllocation(body.ProjectID, body.PhaseID, body.YearMonth, body.Decade, effort); err != nil {
+	var effort, actual float64
+	if body.Kind == "actual" {
+		effort, actual, err = a.Store.SetActualEffort(body.ProjectID, body.PhaseID, body.YearMonth, body.Decade, value)
+	} else {
+		effort, actual, err = a.Store.SetAllocation(body.ProjectID, body.PhaseID, body.YearMonth, body.Decade, value)
+	}
+	if err != nil {
 		writeJSON(w, 400, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
@@ -647,17 +673,19 @@ func (a *App) apiSetAllocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	holidays, _ := a.Store.ListHolidayDates()
-	withPeriod, _ := a.Store.ListAllocations(body.YearMonth, body.YearMonth)
+	withPeriod, _ := a.Store.ListAllocationCells(body.YearMonth, body.YearMonth)
 	periodTotal := 0.0
-	for k, e := range withPeriod {
+	periodActual := 0.0
+	for k, cell := range withPeriod {
 		if k.YearMonth == body.YearMonth && k.Decade == body.Decade {
-			periodTotal = calendar.RoundEffort(periodTotal + e)
+			periodTotal = calendar.RoundEffort(periodTotal + cell[0])
+			periodActual = calendar.RoundEffort(periodActual + cell[1])
 		}
 	}
 	cap, _ := calendar.Capacity(body.YearMonth, body.Decade, holidays, settings.MemberCount)
 	biz, _ := calendar.BusinessDays(body.YearMonth, body.Decade, holidays)
 	status := calendar.AllocationStatus(periodTotal, cap, settings.PlannedUtilization)
-	allocatedSums, _ := a.Store.AllocatedTotalsByProjectPhase()
+	allocatedSums, _ := a.Store.AllocationTotalsByProjectPhase()
 	project, _ := a.Store.GetProject(body.ProjectID)
 	phaseTotal := 0.0
 	if project != nil {
@@ -668,20 +696,26 @@ func (a *App) apiSetAllocation(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	phaseAllocated := calendar.RoundEffort(allocatedSums[[2]int{body.ProjectID, body.PhaseID}])
+	phaseSums := allocatedSums[[2]int{body.ProjectID, body.PhaseID}]
+	phaseAllocated := calendar.RoundEffort(phaseSums[0])
+	phaseActual := calendar.RoundEffort(phaseSums[1])
 	writeJSON(w, 200, map[string]any{
 		"ok":     true,
+		"kind":   body.Kind,
 		"effort": effort,
+		"actual": actual,
 		"period": map[string]any{
 			"year_month":    body.YearMonth,
 			"decade":        body.Decade,
 			"allocated":     periodTotal,
+			"actual":        periodActual,
 			"capacity":      cap,
 			"business_days": biz,
 			"status":        status,
 		},
 		"phase": map[string]any{
 			"allocated": phaseAllocated,
+			"actual":    phaseActual,
 			"total":     phaseTotal,
 			"diff":      calendar.RoundEffort(phaseTotal - phaseAllocated),
 		},

@@ -6,17 +6,20 @@
 </section>
 {{end}}
 <section class="toolbar schedule-toolbar">
-  <form class="inline-form schedule-range-form" method="get" action="/">
-    <div class="range-control">
-      <span class="range-label">表示期間</span>
-      <div class="range-fields">
-        <input type="text" name="from" value="{{.DisplayFrom}}" data-datepicker="month" placeholder="YYYY-MM" required aria-label="表示開始月">
-        <span class="range-sep">〜</span>
-        <input type="text" name="to" value="{{.DisplayTo}}" data-datepicker="month" placeholder="YYYY-MM" required aria-label="表示終了月">
+  <div class="schedule-toolbar-main">
+    <form class="inline-form schedule-range-form" method="get" action="/">
+      <div class="range-control">
+        <span class="range-label">表示期間</span>
+        <div class="range-fields">
+          <input type="text" name="from" value="{{.DisplayFrom}}" data-datepicker="month" placeholder="YYYY-MM" required aria-label="表示開始月">
+          <span class="range-sep">〜</span>
+          <input type="text" name="to" value="{{.DisplayTo}}" data-datepicker="month" placeholder="YYYY-MM" required aria-label="表示終了月">
+        </div>
       </div>
-    </div>
-    <button type="submit">表示</button>
-  </form>
+      <button type="submit">表示</button>
+    </form>
+    <button type="button" id="actual-mode-button" class="secondary" aria-pressed="false" title="実績入力モードにする">実績</button>
+  </div>
   <div class="schedule-toolbar-notes muted">
     <p>
       メンバー人数: {{.MemberCount}}人 ／ キャパ = 営業日 × 人数 ／
@@ -24,6 +27,7 @@
       （割当がキャパ×計画稼働率を超えると黄、キャパ到達で赤）
       ／ 差分 = 見積工数 − 割当済（プラスは割当不足、マイナスは見積が甘い）
       ／ 工数セルは矢印キーで移動
+      ／ 「実績」で実績入力に切り替え（ラベルは見積工数、入力済みセルは網掛け、割当済と割当合計は実績／見積）
     </p>
   </div>
 </section>
@@ -83,24 +87,37 @@
               </div>
             </th>
           {{end}}
-          <td class="sticky-col col-phase">{{$phase.Name}}</td>
+          <td class="sticky-col col-phase{{if and (eq $phase.InputMode "effort") (gt $phase.Actual $phase.Allocated)}} actual-over{{end}}">{{$phase.Name}}</td>
           {{if eq $phase.InputMode "effort"}}
             <td class="sticky-col col-meta1 num" data-phase-total="{{$project.ID}}-{{$phase.ID}}">{{fmtEffort $phase.Total}}</td>
-            <td class="sticky-col col-meta2 num" data-phase-allocated="{{$project.ID}}-{{$phase.ID}}">{{fmtEffort $phase.Allocated}}</td>
+            <td class="sticky-col col-meta2 num" data-phase-allocated="{{$project.ID}}-{{$phase.ID}}">
+              <span class="sum-single">{{fmtEffort $phase.Allocated}}</span>
+              <span class="sum-fraction" aria-hidden="true" title="分子は実績工数、分母は見積工数">
+                <span class="sum-num">{{fmtEffort $phase.Actual}}</span>
+                <span class="sum-line" aria-hidden="true"></span>
+                <span class="sum-den">{{fmtEffort $phase.Allocated}}</span>
+              </span>
+            </td>
             <td class="sticky-col col-meta3 num {{if gt $phase.Diff 0.0}}warn{{else if lt $phase.Diff 0.0}}diff-over{{end}}" data-phase-diff="{{$project.ID}}-{{$phase.ID}}">{{fmtEffort $phase.Diff}}</td>
             {{range $cell := $phase.Cells}}
-              <td class="phase-cell color-{{$phase.Color}} {{if $cell.Active}}active{{end}}">
-                <input
-                  class="effort-input"
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value="{{if gt $cell.Effort 0.0}}{{fmtEffort $cell.Effort}}{{end}}"
-                  data-project-id="{{$project.ID}}"
-                  data-phase-id="{{$phase.ID}}"
-                  data-ym="{{$cell.YM}}"
-                  data-decade="{{$cell.Decade}}"
-                >
+              <td class="phase-cell color-{{$phase.Color}} {{if $cell.Active}}active{{end}} {{if gt $cell.Actual 0.0}}has-actual{{end}}">
+                <label class="effort-field">
+                  <span class="effort-float-label" aria-hidden="true">{{if gt $cell.Effort 0.0}}{{fmtEffort $cell.Effort}}{{end}}</span>
+                  <input
+                    class="effort-input"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value="{{if gt $cell.Effort 0.0}}{{fmtEffort $cell.Effort}}{{end}}"
+                    aria-label="見積工数"
+                    data-project-id="{{$project.ID}}"
+                    data-phase-id="{{$phase.ID}}"
+                    data-ym="{{$cell.YM}}"
+                    data-decade="{{$cell.Decade}}"
+                    data-estimate="{{if gt $cell.Effort 0.0}}{{fmtEffort $cell.Effort}}{{end}}"
+                    data-actual="{{if gt $cell.Actual 0.0}}{{fmtEffort $cell.Actual}}{{end}}"
+                  >
+                </label>
               </td>
             {{end}}
           {{else}}
@@ -131,7 +148,14 @@
       <tr>
         <th class="sticky-col col-project summary-label" colspan="5">割当合計（人日）</th>
         {{range .Summary}}
-          <td class="num {{if eq .Status "over"}}cap-over{{else if eq .Status "warn"}}cap-warn{{end}}" data-sum="{{.YM}}-{{.Decade}}">{{fmtEffort .Allocated}}</td>
+          <td class="num {{if eq .Status "over"}}cap-over{{else if eq .Status "warn"}}cap-warn{{end}}" data-sum="{{.YM}}-{{.Decade}}">
+            <span class="sum-single">{{fmtEffort .Allocated}}</span>
+            <span class="sum-fraction" aria-hidden="true" title="分子は実績工数、分母は見積工数">
+              <span class="sum-num">{{fmtEffort .Actual}}</span>
+              <span class="sum-line" aria-hidden="true"></span>
+              <span class="sum-den">{{fmtEffort .Allocated}}</span>
+            </span>
+          </td>
         {{end}}
       </tr>
     </tfoot>

@@ -8,7 +8,7 @@
 
 - ランタイム: Python **3.14+** / Flask / SQLite（`schedule.db`）
 - UI: Jinja2 テンプレート + `static/` の CSS / JS（フロントエンドフレームワークなし）
-- 配布: PyInstaller で単一 exe（`schedule_manager.spec` / GitHub Releases）
+- 配布: Go 版の単一 exe（`powered_by_golang` / GitHub Releases）。Python 版は `build_exe.bat` で別途ビルドできる
 
 ## ディレクトリ構成
 
@@ -22,7 +22,7 @@
 | `templates/` | Jinja2 HTML |
 | `static/` | CSS / JS |
 | `assets/` | アイコン等の素材 |
-| `.github/workflows/release.yml` | タグ `v*` の Release 公開時に exe をビルドして添付 |
+| `.github/workflows/release.yml` | タグ `v*` の Release 公開時に Go 版 exe をビルドして添付 |
 
 ORM は使いません。SQL は `db.py`（スキーマ）と `models.py`（クエリ）に集約します。
 
