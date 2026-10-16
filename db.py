@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS allocations (
     year_month TEXT NOT NULL,
     decade INTEGER NOT NULL CHECK (decade IN (1, 2, 3)),
     effort REAL NOT NULL DEFAULT 0,
+    actual_effort REAL NOT NULL DEFAULT 0,
     PRIMARY KEY (project_id, phase_id, year_month, decade),
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     FOREIGN KEY (phase_id) REFERENCES phase_definitions(id) ON DELETE CASCADE
@@ -307,6 +308,7 @@ def _migrate_legacy_schema(conn: sqlite3.Connection) -> None:
                 year_month TEXT NOT NULL,
                 decade INTEGER NOT NULL CHECK (decade IN (1, 2, 3)),
                 effort REAL NOT NULL DEFAULT 0,
+                actual_effort REAL NOT NULL DEFAULT 0,
                 PRIMARY KEY (project_id, phase_id, year_month, decade),
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
                 FOREIGN KEY (phase_id) REFERENCES phase_definitions(id) ON DELETE CASCADE
@@ -333,6 +335,18 @@ def _migrate_legacy_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE allocations_new RENAME TO allocations")
 
 
+def _ensure_allocations_columns(conn: sqlite3.Connection) -> None:
+    """allocations に実績工数カラムが無ければ追加する.
+
+    Args:
+        conn (sqlite3.Connection): SQLite 接続。
+    """
+    if not _table_exists(conn, "allocations"):
+        return
+    if not _column_exists(conn, "allocations", "actual_effort"):
+        conn.execute("ALTER TABLE allocations ADD COLUMN actual_effort REAL NOT NULL DEFAULT 0")
+
+
 def init_db() -> None:
     """スキーマ作成・マイグレーションを適用し、settings の初期行を保証する.
 
@@ -344,6 +358,7 @@ def init_db() -> None:
         _ensure_project_phases_columns(conn)
         _seed_phase_definitions(conn)
         _migrate_legacy_schema(conn)
+        _ensure_allocations_columns(conn)
         row = conn.execute("SELECT id FROM settings WHERE id = 1").fetchone()
         if row is None:
             conn.execute(

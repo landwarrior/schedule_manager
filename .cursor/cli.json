@@ -1,0 +1,6 @@
+{
+	"permissions": {
+		"allow": ["Shell(py)", "Shell(.venv\\Scripts\\python.exe)", "Read(**)"],
+		"deny": ["Shell(rm)", "Read(.env*)", "Write(**/.env*)", "Write(**/*.key)"]
+	}
+}
