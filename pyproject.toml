@@ -4,17 +4,11 @@ version = "0.1.0"
 description = "複数プロジェクトの工数・期間を旬単位で管理する Web アプリ"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = [
-    "Flask>=3.0,<4.0",
-]
+dependencies = ["Flask>=3.0,<4.0"]
 
 [project.optional-dependencies]
-dev = [
-    "ruff>=0.16.4",
-]
-build = [
-    "pyinstaller>=6.0",
-]
+dev = ["ruff>=0.16.4"]
+build = ["pyinstaller>=6.0"]
 
 [tool.ruff]
 # Zed ビルトイン Ruff（0.16.4）と CLI の設定ずれを防ぐ
@@ -22,25 +16,21 @@ required-version = ">=0.16.4"
 target-version = "py314"
 line-length = 120
 src = ["."]
-exclude = [
-    ".venv",
-    "**/__pycache__",
-    "*.spec",
-]
+exclude = [".venv", "**/__pycache__", "*.spec"]
 
 [tool.ruff.lint]
 select = [
-    "D",      # pydocstyle
-    "E",      # pycodestyle
-    "F",      # Pyflakes
-    "I",      # isort
-    "UP",     # pyupgrade
-    "B",      # flake8-bugbear
-    "SIM",    # flake8-simplify
+    "D",   # pydocstyle
+    "E",   # pycodestyle
+    "F",   # Pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
 ]
 
 ignore = [
-    "D413",  # Missing blank line after last section
+    "D413", # Missing blank line after last section
 ]
 
 [tool.ruff.lint.isort]
@@ -50,12 +40,13 @@ known-first-party = ["app", "calendar_util", "db", "models", "paths"]
 quote-style = "double"
 
 [tool.pyright]
-exclude = [
-    ".venv",
-    "**/__pycache__",
-    "build",
-    "dist",
-]
-ignore = [
-    "**/*.spec",
-]
+exclude = [".venv", "**/__pycache__", "build", "dist"]
+ignore = ["**/*.spec"]
+
+[tool.pyrefly]
+project-excludes = [".venv", "**/__pycache__", "build", "dist"]
+# infer-with-first-use は呼び出しやコンストラクタだけでは決まらない型変数を、最初の使い方から推論しないようにする
+# x = []           # x は list[Any]
+# x.append(1)      # 通る
+# x.append("2")    # 通る
+infer-with-first-use = false
