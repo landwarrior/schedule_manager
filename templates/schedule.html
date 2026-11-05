@@ -29,6 +29,7 @@
       （割当がキャパ×計画稼働率を超えると黄、キャパ到達で赤）
       ／ 差分 = 見積工数 − 割当済（プラスは割当不足、マイナスは見積が甘い）
       ／ 工数セルは矢印キーで移動
+      ／ 今日の旬の列は薄い背景色で表示
       ／ 「実績」で実績入力に切り替え（ラベルは見積工数、入力済みセルは網掛け、割当済と割当合計は実績／見積）
     </p>
   </div>
@@ -67,7 +68,12 @@
         <th class="sticky-col col-meta3"></th>
         {% for ym in months %}
           {% for d in [1, 2, 3] %}
-            <th class="decade-head" data-ym="{{ ym }}" data-decade="{{ d }}">{{ decade_labels[d] }}</th>
+            <th
+              class="decade-head{% if ym == current_ym and d == current_decade %} col-current{% endif %}"
+              data-ym="{{ ym }}"
+              data-decade="{{ d }}"
+              {% if ym == current_ym and d == current_decade %}aria-current="date" title="現在の期間"{% endif %}
+            >{{ decade_labels[d] }}</th>
           {% endfor %}
         {% endfor %}
       </tr>
@@ -108,7 +114,7 @@
             </td>
             <td class="sticky-col col-meta3 num {% if phase.diff > 0 %}warn{% elif phase.diff < 0 %}diff-over{% endif %}" data-phase-diff="{{ project.id }}-{{ phase.id }}">{{ '%.1f'|format(phase.diff) }}</td>
             {% for cell in phase.cells %}
-              <td class="phase-cell color-{{ phase.color }} {% if cell.active %}active{% endif %} {% if cell.actual %}has-actual{% endif %}">
+              <td class="phase-cell color-{{ phase.color }} {% if cell.active %}active{% endif %} {% if cell.actual %}has-actual{% endif %}{% if cell.ym == current_ym and cell.decade == current_decade %} col-current{% endif %}">
                 <label class="effort-field">
                   <span class="effort-float-label" aria-hidden="true">{{ '%.1f'|format(cell.effort) if cell.effort else '' }}</span>
                   <input
@@ -131,7 +137,7 @@
           {% else %}
             <td class="sticky-col col-meta1" colspan="3">期間のみ</td>
             {% for cell in phase.cells %}
-              <td class="phase-cell color-{{ phase.color }} {% if cell.active %}active{% endif %}">
+              <td class="phase-cell color-{{ phase.color }} {% if cell.active %}active{% endif %}{% if cell.ym == current_ym and cell.decade == current_decade %} col-current{% endif %}">
                 {% if cell.active %}●{% endif %}
               </td>
             {% endfor %}
@@ -144,19 +150,19 @@
       <tr>
         <th class="sticky-col col-project summary-label" colspan="5">営業日</th>
         {% for item in summary %}
-          <td class="num" data-biz="{{ item.ym }}-{{ item.decade }}">{{ item.business_days }}</td>
+          <td class="num{% if item.ym == current_ym and item.decade == current_decade %} col-current{% endif %}" data-biz="{{ item.ym }}-{{ item.decade }}">{{ item.business_days }}</td>
         {% endfor %}
       </tr>
       <tr>
         <th class="sticky-col col-project summary-label" colspan="5">キャパ（人日）</th>
         {% for item in summary %}
-          <td class="num" data-cap="{{ item.ym }}-{{ item.decade }}">{{ '%.1f'|format(item.capacity) }}</td>
+          <td class="num{% if item.ym == current_ym and item.decade == current_decade %} col-current{% endif %}" data-cap="{{ item.ym }}-{{ item.decade }}">{{ '%.1f'|format(item.capacity) }}</td>
         {% endfor %}
       </tr>
       <tr>
         <th class="sticky-col col-project summary-label" colspan="5">割当合計（人日）</th>
         {% for item in summary %}
-          <td class="num {% if item.status == 'over' %}cap-over{% elif item.status == 'warn' %}cap-warn{% endif %}" data-sum="{{ item.ym }}-{{ item.decade }}">
+          <td class="num {% if item.status == 'over' %}cap-over{% elif item.status == 'warn' %}cap-warn{% endif %}{% if item.ym == current_ym and item.decade == current_decade %} col-current{% endif %}" data-sum="{{ item.ym }}-{{ item.decade }}">
             <span class="sum-single">{{ '%.1f'|format(item.allocated) }}</span>
             <span class="sum-fraction" aria-hidden="true" title="分子は実績工数、分母は見積工数">
               <span class="sum-num">{{ '%.1f'|format(item.actual) }}</span>

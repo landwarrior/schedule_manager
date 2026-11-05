@@ -20,6 +20,7 @@ from calendar_util import (
     allocation_status,
     business_days,
     capacity,
+    current_period,
     is_period_in_range,
     is_valid_effort,
     iter_months,
@@ -387,6 +388,7 @@ def schedule() -> ResponseReturnValue:
         )
 
     contract_name = (settings["contract_name"] or "").strip() if settings else ""
+    current_ym, current_decade = current_period()
 
     return render_template(
         "schedule.html",
@@ -395,6 +397,8 @@ def schedule() -> ResponseReturnValue:
         display_to=display_to,
         months=months,
         decade_labels=DECADE_LABELS,
+        current_ym=current_ym,
+        current_decade=current_decade,
         projects=project_rows,
         summary=summary,
         member_count=member_count,

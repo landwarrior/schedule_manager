@@ -27,6 +27,7 @@
       （割当がキャパ×計画稼働率を超えると黄、キャパ到達で赤）
       ／ 差分 = 見積工数 − 割当済（プラスは割当不足、マイナスは見積が甘い）
       ／ 工数セルは矢印キーで移動
+      ／ 今日の旬の列は薄い背景色で表示
       ／ 「実績」で実績入力に切り替え（ラベルは見積工数、入力済みセルは網掛け、割当済と割当合計は実績／見積）
     </p>
   </div>
@@ -61,7 +62,7 @@
         <th class="sticky-col col-meta3"></th>
         {{range $ym := .Months}}
           {{range $d := decades}}
-            <th class="decade-head" data-ym="{{$ym}}" data-decade="{{$d}}">{{index $.DecadeLabels $d}}</th>
+            <th class="decade-head{{if and (eq $ym $.CurrentYM) (eq $d $.CurrentDecade)}} col-current{{end}}" data-ym="{{$ym}}" data-decade="{{$d}}"{{if and (eq $ym $.CurrentYM) (eq $d $.CurrentDecade)}} aria-current="date" title="現在の期間"{{end}}>{{index $.DecadeLabels $d}}</th>
           {{end}}
         {{end}}
       </tr>
@@ -100,7 +101,7 @@
             </td>
             <td class="sticky-col col-meta3 num {{if gt $phase.Diff 0.0}}warn{{else if lt $phase.Diff 0.0}}diff-over{{end}}" data-phase-diff="{{$project.ID}}-{{$phase.ID}}">{{fmtEffort $phase.Diff}}</td>
             {{range $cell := $phase.Cells}}
-              <td class="phase-cell color-{{$phase.Color}} {{if $cell.Active}}active{{end}} {{if gt $cell.Actual 0.0}}has-actual{{end}}">
+              <td class="phase-cell color-{{$phase.Color}} {{if $cell.Active}}active{{end}} {{if gt $cell.Actual 0.0}}has-actual{{end}}{{if and (eq $cell.YM $.CurrentYM) (eq $cell.Decade $.CurrentDecade)}} col-current{{end}}">
                 <label class="effort-field">
                   <span class="effort-float-label" aria-hidden="true">{{if gt $cell.Effort 0.0}}{{fmtEffort $cell.Effort}}{{end}}</span>
                   <input
@@ -123,7 +124,7 @@
           {{else}}
             <td class="sticky-col col-meta1" colspan="3">期間のみ</td>
             {{range $cell := $phase.Cells}}
-              <td class="phase-cell color-{{$phase.Color}} {{if $cell.Active}}active{{end}}">
+              <td class="phase-cell color-{{$phase.Color}} {{if $cell.Active}}active{{end}}{{if and (eq $cell.YM $.CurrentYM) (eq $cell.Decade $.CurrentDecade)}} col-current{{end}}">
                 {{if $cell.Active}}●{{end}}
               </td>
             {{end}}
@@ -136,19 +137,19 @@
       <tr>
         <th class="sticky-col col-project summary-label" colspan="5">営業日</th>
         {{range .Summary}}
-          <td class="num" data-biz="{{.YM}}-{{.Decade}}">{{.BusinessDays}}</td>
+          <td class="num{{if and (eq .YM $.CurrentYM) (eq .Decade $.CurrentDecade)}} col-current{{end}}" data-biz="{{.YM}}-{{.Decade}}">{{.BusinessDays}}</td>
         {{end}}
       </tr>
       <tr>
         <th class="sticky-col col-project summary-label" colspan="5">キャパ（人日）</th>
         {{range .Summary}}
-          <td class="num" data-cap="{{.YM}}-{{.Decade}}">{{fmtEffort .Capacity}}</td>
+          <td class="num{{if and (eq .YM $.CurrentYM) (eq .Decade $.CurrentDecade)}} col-current{{end}}" data-cap="{{.YM}}-{{.Decade}}">{{fmtEffort .Capacity}}</td>
         {{end}}
       </tr>
       <tr>
         <th class="sticky-col col-project summary-label" colspan="5">割当合計（人日）</th>
         {{range .Summary}}
-          <td class="num {{if eq .Status "over"}}cap-over{{else if eq .Status "warn"}}cap-warn{{end}}" data-sum="{{.YM}}-{{.Decade}}">
+          <td class="num {{if eq .Status "over"}}cap-over{{else if eq .Status "warn"}}cap-warn{{end}}{{if and (eq .YM $.CurrentYM) (eq .Decade $.CurrentDecade)}} col-current{{end}}" data-sum="{{.YM}}-{{.Decade}}">
             <span class="sum-single">{{fmtEffort .Allocated}}</span>
             <span class="sum-fraction" aria-hidden="true" title="分子は実績工数、分母は見積工数">
               <span class="sum-num">{{fmtEffort .Actual}}</span>

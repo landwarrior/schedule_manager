@@ -17,6 +17,7 @@ package calendar_test
 
 import (
 	"testing"
+	"time"
 
 	"schedule_manager_go/internal/calendar"
 )
@@ -70,6 +71,23 @@ func TestIsPeriodInRange(t *testing.T) {
 }
 
 // TestRoundEffort は「期待どおり」と「不正を弾く」の両方を見る例。
+func TestCurrentPeriod(t *testing.T) {
+	day := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
+	ym, decade := calendar.CurrentPeriod(day)
+	if ym != "2026-11" || decade != 1 {
+		t.Fatalf("got %s %d", ym, decade)
+	}
+	if calendar.DecadeOf(time.Date(2026, 11, 10, 0, 0, 0, 0, time.UTC)) != 1 {
+		t.Fatal("day 10 should be early")
+	}
+	if calendar.DecadeOf(time.Date(2026, 11, 11, 0, 0, 0, 0, time.UTC)) != 2 {
+		t.Fatal("day 11 should be middle")
+	}
+	if calendar.DecadeOf(time.Date(2026, 11, 21, 0, 0, 0, 0, time.UTC)) != 3 {
+		t.Fatal("day 21 should be late")
+	}
+}
+
 func TestRoundEffort(t *testing.T) {
 	if v := calendar.RoundEffort(1.05); v != 1.1 {
 		t.Fatalf("got %v", v)
