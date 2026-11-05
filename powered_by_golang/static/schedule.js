@@ -160,6 +160,27 @@
     }
   }
 
+  function scrollCurrentPeriodIntoView() {
+    const head = document.querySelector(".schedule-table thead th.decade-head.col-current");
+    if (!head || !table) {
+      return;
+    }
+    const scrollRoot = head.closest(".table-scroll");
+    if (!scrollRoot) {
+      return;
+    }
+
+    const stickyWidth = Number.parseFloat(getComputedStyle(table).getPropertyValue("--sticky-cols-width")) || 0;
+    const pad = 8;
+    const rootRect = scrollRoot.getBoundingClientRect();
+    const headRect = head.getBoundingClientRect();
+    const viewLeft = rootRect.left + scrollRoot.clientLeft + stickyWidth + pad;
+    const viewRight = rootRect.left + scrollRoot.clientLeft + scrollRoot.clientWidth - pad;
+    const viewWidth = Math.max(viewRight - viewLeft, headRect.width);
+    const targetLeft = viewLeft + (viewWidth - headRect.width) / 2;
+    scrollRoot.scrollLeft += headRect.left - targetLeft;
+  }
+
   function clearActiveColumn() {
     activeColEls.forEach((el) => el.classList.remove("col-editing"));
     activeColEls = [];
@@ -383,5 +404,6 @@
   }
 
   syncStickyOffsets();
+  scrollCurrentPeriodIntoView();
   window.addEventListener("resize", syncStickyOffsets);
 })();

@@ -11,6 +11,8 @@ html[data-theme="system"] {
   --project-divider: #8a8a8a;
   --accent: #2563eb;
   --button-bg: #2563eb;
+  --current-col-bg: #d5ddec;
+  --current-col-tint: rgba(37, 99, 235, 0.07);
   --button-text: #ffffff;
   --button-border: #2563eb;
   --danger: #b91c1c;
@@ -58,6 +60,8 @@ html[data-theme="dark"] {
   --project-divider: #707070;
   --accent: #8bb4e8;
   --button-bg: #3a4f6a;
+  --current-col-bg: #32373e;
+  --current-col-tint: rgba(6, 12, 22, 0.24);
   --button-text: #d5dbe6;
   --button-border: #4a6280;
   --danger: #f87171;
@@ -102,6 +106,8 @@ html[data-theme="dark"] {
     --project-divider: #707070;
     --accent: #8bb4e8;
     --button-bg: #3a4f6a;
+    --current-col-bg: #32373e;
+    --current-col-tint: rgba(6, 12, 22, 0.24);
     --button-text: #d5dbe6;
     --button-border: #4a6280;
     --danger: #f87171;
@@ -685,6 +691,14 @@ legend {
   font-weight: 700;
   color: var(--text);
   box-shadow: inset 0 -3px 0 var(--text);
+}
+
+.schedule-table thead th.decade-head.col-current {
+  background: var(--current-col-bg);
+}
+
+.schedule-table td.col-current {
+  box-shadow: inset 0 0 0 9999px var(--current-col-tint);
 }
 
 .effort-input.saving { outline: 2px solid var(--accent); }

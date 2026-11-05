@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"schedule_manager_go/internal/calendar"
 	"schedule_manager_go/internal/models"
@@ -453,6 +454,8 @@ type schedulePageData struct {
 	Summary            []summaryItem
 	MemberCount        int
 	PlannedUtilization float64
+	CurrentYM          string
+	CurrentDecade      int
 }
 
 func (a *App) buildSchedulePhaseRows(
@@ -603,6 +606,7 @@ func (a *App) schedule(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	currentYM, currentDecade := calendar.CurrentPeriod(time.Now())
 	data := schedulePageData{
 		baseData:           a.base(r, "スケジュール — スケジュール管理", "page-schedule", "schedule_content"),
 		ContractName:       strings.TrimSpace(settings.ContractName),
@@ -614,6 +618,8 @@ func (a *App) schedule(w http.ResponseWriter, r *http.Request) {
 		Summary:            summary,
 		MemberCount:        memberCount,
 		PlannedUtilization: planned,
+		CurrentYM:          currentYM,
+		CurrentDecade:      currentDecade,
 	}
 	// Re-attach flash after clearFlash consumed cookie on response; take from request cookie already done in base.
 	// clearFlash clears cookie for next request; current render already has flash from takeFlash in base...

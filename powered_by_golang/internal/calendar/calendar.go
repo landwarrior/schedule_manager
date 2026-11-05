@@ -76,6 +76,23 @@ func FormatYM(year, month int) string {
 	return fmt.Sprintf("%04d-%02d", year, month)
 }
 
+func DecadeOf(day time.Time) int {
+	if day.Day() <= 10 {
+		return 1
+	}
+	if day.Day() <= 20 {
+		return 2
+	}
+	return 3
+}
+
+func CurrentPeriod(today time.Time) (string, int) {
+	if today.IsZero() {
+		today = time.Now()
+	}
+	return FormatYM(today.Year(), int(today.Month())), DecadeOf(today)
+}
+
 func NormalizeYM(value string) (string, error) {
 	text := strings.TrimSpace(strings.ReplaceAll(value, "/", "-"))
 	if text == "" {

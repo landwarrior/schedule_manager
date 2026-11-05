@@ -74,6 +74,35 @@ def format_ym(year: int, month: int) -> str:
     return f"{year:04d}-{month:02d}"
 
 
+def decade_of(day: date) -> int:
+    """日付が属する旬を返す.
+
+    Args:
+        day (date): 判定する日付。
+
+    Returns:
+        int: 旬（1=上旬, 2=中旬, 3=下旬）。
+    """
+    if day.day <= 10:
+        return 1
+    if day.day <= 20:
+        return 2
+    return 3
+
+
+def current_period(today: date | None = None) -> tuple[str, int]:
+    """基準日が属する年月と旬を返す.
+
+    Args:
+        today (date | None): 基準日。省略時は今日。
+
+    Returns:
+        tuple[str, int]: (YYYY-MM, 旬) のタプル。
+    """
+    day = date.today() if today is None else today
+    return format_ym(day.year, day.month), decade_of(day)
+
+
 def normalize_ym(value: str | None) -> str:
     """YYYY-MM または YYYY/MM を受け取り、YYYY-MM に正規化する.
 
